@@ -1,0 +1,69 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# Go build output
+/bin/
+/build/
+/dist/
+/out/
+/target/
+/coverage/
+/coverage.txt
+
+# Vendor directory (if not using vendored dependencies)
+vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Dependency files (handled by go mod)
+!go.mod
+!go.sum
+
+# Logs
+*.log
+*.out
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Temporary or cache files
+*.tmp
+*.temp
+*.bak
+*.old
+*.orig
+*.rej
+
+# Test cache
+*.coverprofile
+*.prof
+*.cov
+
+# Env files
+.env
+.env.local
+.env.*
+
+# OS-specific files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Go test binaries and examples
+*_test.go
+example/
+
+# Local configurations
+config.local.yaml
+
