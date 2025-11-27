@@ -10,10 +10,6 @@ func NewScheduleExecutor(command string, interval string) *ScheduleExecutor {
 	return &ScheduleExecutor{scheduleService: services.NewScheduleService(command, interval)}
 }
 
-func (e *ScheduleExecutor) Execute() error {
-	return e.scheduleService.Execute()
-}
-
-func (e *ScheduleExecutor) GetID() string {
-	return e.scheduleService.GetID()
+func (e *ScheduleExecutor) Execute() {
+	e.scheduleService.Execute()
 }

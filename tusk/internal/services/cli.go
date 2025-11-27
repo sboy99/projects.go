@@ -9,18 +9,18 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sboy99/projects.go/tusk/pkg/formatter"
+	"github.com/sboy99/projects.go/tusk/pkg/logger"
 )
 
 // CLIService handles command execution with streaming output
 type CLIService struct {
-	formatter *formatter.Formatter
+	logger *logger.Logger
 }
 
 // NewCLIService creates a new CLI service instance
 func NewCLIService() *CLIService {
 	return &CLIService{
-		formatter: formatter.NewFormatter("  "),
+		logger: logger.NewLogger("  "),
 	}
 }
 
@@ -173,7 +173,7 @@ func (c *CLIService) IsValidCommand(command string, isShellCommand bool) error {
 
 	executable := parts[0]
 	if _, err := exec.LookPath(executable); err != nil {
-		return fmt.Errorf("executable '%s' not found in PATH: %w", executable, err)
+		return err
 	}
 
 	return nil
@@ -186,12 +186,8 @@ func (c *CLIService) streamOutput(reader io.ReadCloser, buf *strings.Builder, pr
 		line := scanner.Text()
 		buf.WriteString(line + "\n")
 
-		// Format and print the line
-		if isStdout {
-			c.formatter.FormatOutput(prefix, line, true)
-		} else {
-			c.formatter.FormatOutput(prefix, line, false)
-		}
+		// Format and print the line using logger
+		c.logger.Output(prefix, line, !isStdout)
 	}
 }
 

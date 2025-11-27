@@ -1,12 +1,17 @@
 package cli
 
 import (
-	"fmt"
-
 	"github.com/sboy99/projects.go/tusk/internal/config"
 	"github.com/sboy99/projects.go/tusk/internal/version"
+	"github.com/sboy99/projects.go/tusk/pkg/logger"
 	"github.com/spf13/cobra"
 )
+
+var log *logger.Logger
+
+func init() {
+	log = logger.NewLogger("")
+}
 
 var cfgFile string
 
@@ -49,6 +54,6 @@ var versionCmd = &cobra.Command{
 	Short: "Print the version number",
 	Long:  `Print the version number and build information.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(version.GetBuildInfo())
+		log.Println(version.GetBuildInfo())
 	},
 }
