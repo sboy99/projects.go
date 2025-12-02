@@ -123,3 +123,8 @@ func (l *Logger) Output(tag, message string, isError bool) {
 		l.formatter.FormatOutput(tag, message, true)
 	}
 }
+
+// FormatTable formats a table of data
+func (l *Logger) FormatTable(headers []string, rows [][]string) string {
+	return l.formatter.FormatTable(headers, rows)
+}
