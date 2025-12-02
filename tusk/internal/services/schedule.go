@@ -3,37 +3,44 @@ package services
 import (
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
-	"github.com/sboy99/projects.go/tusk/internal/config"
 	"github.com/sboy99/projects.go/tusk/internal/utils"
 	"github.com/sboy99/projects.go/tusk/pkg/logger"
+	"github.com/sboy99/projects.go/tusk/pkg/namegen"
+	"github.com/sboy99/projects.go/tusk/pkg/storage"
 )
 
 type ScheduleService struct {
 	id           string
+	name         string
 	command      string
 	interval     string
 	startTime    time.Time
 	cliService   *CLIService
 	timerService *TimerService
 	logger       *logger.Logger
+	storage      *storage.Storage
 }
 
-func NewScheduleService(command string, interval string) *ScheduleService {
+func NewScheduleService(name, command, interval string) *ScheduleService {
+	if name == "" {
+		name = namegen.GenerateOne()
+	}
 	return &ScheduleService{
 		id:           utils.GenerateUUID(),
+		name:         name,
 		command:      command,
 		interval:     interval,
 		startTime:    time.Now(),
 		cliService:   NewCLIService(),
 		timerService: NewTimerService(),
 		logger:       logger.NewLogger("  "),
+		storage:      storage.NewStorage("./data/schedules.json"),
 	}
 }
 
-func (s *ScheduleService) Execute() {
+func (s *ScheduleService) Create() {
 	if err := s.cliService.IsValidCommand(s.command, false); err != nil {
 		s.logger.Error("invalid command: %v", err)
 		return
@@ -68,11 +75,36 @@ func (s *ScheduleService) Execute() {
 		return
 	}
 
-	s.logger.Success("scheduled task successfully")
+	if err := s.storage.Upsert(s.id, map[string]any{
+		"name":            s.name,
+		"command":         s.command,
+		"interval":        s.interval,
+		"startTime":       s.startTime,
+		"serviceFilePath": s.getServiceFilePath(),
+		"timerFilePath":   s.getTimerFilePath(),
+	}); err != nil {
+		s.logger.Error("failed to upsert schedule: %v", err)
+		return
+	}
+
+	s.logger.Success("scheduled task %s successfully", s.name)
+}
+
+func (s *ScheduleService) List() {
+	schedules, err := s.storage.ReadAll()
+	if err != nil {
+		s.logger.Error("failed to get all schedules: %v", err)
+		return
+	}
+	if len(schedules) == 0 {
+		s.logger.Info("no scheduled tasks found")
+		return
+	}
+	s.logger.Success("scheduled tasks: %v", schedules)
 }
 
 func (s *ScheduleService) getServiceName() string {
-	return strings.Join([]string{s.id, config.Get().AppName}, "-")
+	return s.name
 }
 
 func (s *ScheduleService) getScriptPath() string {

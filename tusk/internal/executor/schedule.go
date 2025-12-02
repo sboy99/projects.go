@@ -6,10 +6,14 @@ type ScheduleExecutor struct {
 	scheduleService *services.ScheduleService
 }
 
-func NewScheduleExecutor(command string, interval string) *ScheduleExecutor {
-	return &ScheduleExecutor{scheduleService: services.NewScheduleService(command, interval)}
+func NewScheduleExecutor(name, command, interval string) *ScheduleExecutor {
+	return &ScheduleExecutor{scheduleService: services.NewScheduleService(name, command, interval)}
 }
 
-func (e *ScheduleExecutor) Execute() {
-	e.scheduleService.Execute()
+func (e *ScheduleExecutor) Create() {
+	e.scheduleService.Create()
+}
+
+func (e *ScheduleExecutor) List() {
+	e.scheduleService.List()
 }
