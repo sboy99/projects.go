@@ -34,3 +34,15 @@ func JoinStrings(sep string, strs ...string) string {
 func GenerateUUID() string {
 	return uuid.New().String()
 }
+
+func TransformToTableData(data []map[string]any) (headers []string, rows [][]string) {
+	headers = make([]string, len(data[0]))
+	rows = make([][]string, len(data))
+	for i, item := range data {
+		for key, value := range item {
+			headers[i] = key
+			rows[i] = append(rows[i], fmt.Sprintf("%v", value))
+		}
+	}
+	return headers, rows
+}
