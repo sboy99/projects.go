@@ -51,6 +51,13 @@ func (l *Logger) Debug(format string, args ...any) {
 	}
 }
 
+func (l *Logger) Highlight(format string, args ...any) {
+	if l.level <= LevelInfo {
+		message := fmt.Sprintf(format, args...)
+		l.log("=================%s=================", message, false)
+	}
+}
+
 // Info logs an info message
 func (l *Logger) Info(format string, args ...any) {
 	if l.level <= LevelInfo {
