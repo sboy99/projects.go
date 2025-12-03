@@ -33,8 +33,8 @@ var scheduleListCmd = &cobra.Command{
 	Short: "List all scheduled tasks",
 	Long:  `List all scheduled tasks with their details.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// TODO: list all schedules from storage
-
+		scheduleExecutor := executor.NewScheduleExecutor(name, command, interval)
+		scheduleExecutor.List()
 	},
 }
 

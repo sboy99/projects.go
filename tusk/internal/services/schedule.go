@@ -11,6 +11,16 @@ import (
 	"github.com/sboy99/projects.go/tusk/pkg/storage"
 )
 
+type Schedule struct {
+	ID              string    `json:"id"`
+	Name            string    `json:"name"`
+	Command         string    `json:"command"`
+	Interval        string    `json:"interval"`
+	StartTime       time.Time `json:"startTime"`
+	ServiceFilePath string    `json:"serviceFilePath"`
+	TimerFilePath   string    `json:"timerFilePath"`
+}
+
 type ScheduleService struct {
 	id           string
 	name         string
@@ -20,7 +30,7 @@ type ScheduleService struct {
 	cliService   *CLIService
 	timerService *TimerService
 	logger       *logger.Logger
-	storage      *storage.Storage
+	storage      *storage.Storage[Schedule]
 }
 
 func NewScheduleService(name, command, interval string) *ScheduleService {
@@ -36,20 +46,24 @@ func NewScheduleService(name, command, interval string) *ScheduleService {
 		cliService:   NewCLIService(),
 		timerService: NewTimerService(),
 		logger:       logger.NewLogger("  "),
-		storage:      storage.NewStorage("./data/schedules.json"),
+		storage:      storage.NewStorage[Schedule]("./data/schedules.json"),
 	}
 }
 
 func (s *ScheduleService) Create() {
+	s.logger.Highlight("creating schedule %s", s.name)
+	s.logger.Info("==> Validating command: %s", s.command)
 	if err := s.cliService.IsValidCommand(s.command, false); err != nil {
 		s.logger.Error("invalid command: %v", err)
 		return
 	}
+	s.logger.Info("==> Validating interval: %s", s.interval)
 	if err := s.timerService.IsValidInterval(s.interval); err != nil {
 		s.logger.Error("invalid interval: %v", err)
 		return
 	}
 
+	s.logger.Info("==> Creating script...")
 	if err := s.createScript(); err != nil {
 		s.logger.Error("failed to create script: %v", err)
 	}
@@ -57,31 +71,36 @@ func (s *ScheduleService) Create() {
 		s.logger.Error("failed to give script exec permission: %v", err)
 	}
 
+	s.logger.Info("==> Creating service file...")
 	if err := s.createServiceFile(); err != nil {
 		s.logger.Error("failed to create service file: %v", err)
 		return
 	}
+	s.logger.Info("==> Creating timer file...")
 	if err := s.createTimerFile(); err != nil {
 		s.logger.Error("failed to create timer file: %v", err)
 		return
 	}
-
+	s.logger.Info("==> Reloading systemd...")
 	if err := s.reloadSystemd(); err != nil {
 		s.logger.Error("failed to reload systemd: %v", err)
 		return
 	}
+	s.logger.Info("==> Enabling timer...")
 	if err := s.enableTimer(); err != nil {
 		s.logger.Error("failed to enable timer: %v", err)
 		return
 	}
 
-	if err := s.storage.Upsert(s.id, map[string]any{
-		"name":            s.name,
-		"command":         s.command,
-		"interval":        s.interval,
-		"startTime":       s.startTime,
-		"serviceFilePath": s.getServiceFilePath(),
-		"timerFilePath":   s.getTimerFilePath(),
+	// Use Upsert with ID as key to create or update
+	if err := s.storage.Upsert(s.id, Schedule{
+		ID:              s.id,
+		Name:            s.name,
+		Command:         s.command,
+		Interval:        s.interval,
+		StartTime:       s.startTime,
+		ServiceFilePath: s.getServiceFilePath(),
+		TimerFilePath:   s.getTimerFilePath(),
 	}); err != nil {
 		s.logger.Error("failed to upsert schedule: %v", err)
 		return
@@ -100,7 +119,8 @@ func (s *ScheduleService) List() {
 		s.logger.Info("no scheduled tasks found")
 		return
 	}
-	s.logger.Success("scheduled tasks: %v", schedules)
+	headers, rows := utils.TransformToTableData(schedules)
+	s.logger.FormatTable(headers, rows)
 }
 
 func (s *ScheduleService) getServiceName() string {
