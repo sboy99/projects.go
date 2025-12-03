@@ -35,14 +35,12 @@ func GenerateUUID() string {
 	return uuid.New().String()
 }
 
-func TransformToTableData(data []map[string]any) (headers []string, rows [][]string) {
-	headers = make([]string, len(data[0]))
-	rows = make([][]string, len(data))
-	for i, item := range data {
-		for key, value := range item {
-			headers[i] = key
-			rows[i] = append(rows[i], fmt.Sprintf("%v", value))
-		}
+func TransformToTableData[T any](data map[string]T) (headers []string, rows [][]string) {
+	headers = make([]string, 0, len(data))
+	rows = make([][]string, 0, len(data))
+	for key, value := range data {
+		headers = append(headers, key)
+		rows = append(rows, []string{fmt.Sprintf("%v", value)})
 	}
 	return headers, rows
 }
