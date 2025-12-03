@@ -10,24 +10,25 @@ import (
 )
 
 // Storage provides a JSON-based storage layer with CRUD operations
-type Storage struct {
+// It stores typed data as a map[string]T
+type Storage[T any] struct {
 	filePath string
 	mu       sync.RWMutex
-	data     map[string]any
+	data     map[string]T
 }
 
 // NewStorage creates a new storage instance with the given file path
 // The file path can be a filename (stored in current directory) or a full path
-func NewStorage(filePath string) *Storage {
+func NewStorage[T any](filePath string) *Storage[T] {
 	// Ensure the directory exists
 	dir := filepath.Dir(filePath)
 	if dir != "." && dir != "" {
 		_ = os.MkdirAll(dir, 0755)
 	}
 
-	storage := &Storage{
+	storage := &Storage[T]{
 		filePath: filePath,
-		data:     make(map[string]any),
+		data:     make(map[string]T),
 	}
 
 	// Load existing data if file exists (ignore errors, start with empty data)
@@ -37,13 +38,13 @@ func NewStorage(filePath string) *Storage {
 }
 
 // load reads data from the JSON file
-func (s *Storage) load() error {
+func (s *Storage[T]) load() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	// If file doesn't exist, start with empty data
 	if _, err := os.Stat(s.filePath); os.IsNotExist(err) {
-		s.data = make(map[string]any)
+		s.data = make(map[string]T)
 		return nil
 	}
 
@@ -54,7 +55,7 @@ func (s *Storage) load() error {
 
 	// If file is empty, start with empty data
 	if len(file) == 0 {
-		s.data = make(map[string]any)
+		s.data = make(map[string]T)
 		return nil
 	}
 
@@ -67,7 +68,7 @@ func (s *Storage) load() error {
 
 // save writes data to the JSON file
 // Note: This method should only be called while holding a write lock (Lock())
-func (s *Storage) save() error {
+func (s *Storage[T]) save() error {
 	data, err := json.MarshalIndent(s.data, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal JSON: %w", err)
@@ -80,8 +81,8 @@ func (s *Storage) save() error {
 	return nil
 }
 
-// Create adds a new record with the given key and value
-func (s *Storage) Create(key string, value any) error {
+// Create adds a new item with the given key
+func (s *Storage[T]) Create(key string, item T) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -89,59 +90,69 @@ func (s *Storage) Create(key string, value any) error {
 		return fmt.Errorf("key '%s' already exists", key)
 	}
 
-	s.data[key] = value
+	s.data[key] = item
 	return s.save()
 }
 
-// Read retrieves a record by key
-func (s *Storage) Read(key string) (any, error) {
+// Upsert creates or updates an item with the given key
+func (s *Storage[T]) Upsert(key string, item T) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.data[key] = item
+	return s.save()
+}
+
+// Read retrieves an item by key
+func (s *Storage[T]) Read(key string) (T, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	var zero T
 	value, exists := s.data[key]
 	if !exists {
-		return nil, fmt.Errorf("key '%s' not found", key)
+		return zero, fmt.Errorf("key '%s' not found", key)
 	}
 
 	return value, nil
 }
 
-// ReadAll retrieves all records
-func (s *Storage) ReadAll() (map[string]any, error) {
+// ReadAll retrieves all items from the map
+func (s *Storage[T]) ReadAll() (map[string]T, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	// Create a copy to prevent external modification
-	result := make(map[string]any)
+	result := make(map[string]T)
 	maps.Copy(result, s.data)
 
 	return result, nil
 }
 
-// Update updates an existing record
-func (s *Storage) Update(key string, value any) error {
+// GetFilePath returns the file path used by this storage instance
+func (s *Storage[T]) GetFilePath() string {
+	return s.filePath
+}
+
+// Count returns the number of items in the map
+func (s *Storage[T]) Count() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return len(s.data)
+}
+
+// Clear removes all items from the map
+func (s *Storage[T]) Clear() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.data[key]; !exists {
-		return fmt.Errorf("key '%s' not found", key)
-	}
-
-	s.data[key] = value
+	s.data = make(map[string]T)
 	return s.save()
 }
 
-// Upsert creates or updates a record (insert if not exists, update if exists)
-func (s *Storage) Upsert(key string, value any) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.data[key] = value
-	return s.save()
-}
-
-// Delete removes a record by key
-func (s *Storage) Delete(key string) error {
+// Delete removes an item by key
+func (s *Storage[T]) Delete(key string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -154,32 +165,10 @@ func (s *Storage) Delete(key string) error {
 }
 
 // Exists checks if a key exists
-func (s *Storage) Exists(key string) bool {
+func (s *Storage[T]) Exists(key string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	_, exists := s.data[key]
 	return exists
-}
-
-// Count returns the number of records
-func (s *Storage) Count() int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	return len(s.data)
-}
-
-// Clear removes all records
-func (s *Storage) Clear() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.data = make(map[string]any)
-	return s.save()
-}
-
-// GetFilePath returns the file path used by this storage instance
-func (s *Storage) GetFilePath() string {
-	return s.filePath
 }
