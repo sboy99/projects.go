@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/sboy99/projects.go/tusk/internal/utils"
@@ -17,205 +18,130 @@ type Schedule struct {
 	Command         string    `json:"command"`
 	Interval        string    `json:"interval"`
 	StartTime       time.Time `json:"startTime"`
+	ScriptFilePath  string    `json:"scriptFilePath"`
 	ServiceFilePath string    `json:"serviceFilePath"`
 	TimerFilePath   string    `json:"timerFilePath"`
 }
 
 type ScheduleService struct {
-	id           string
-	name         string
-	command      string
-	interval     string
-	startTime    time.Time
+	schedule     *Schedule
 	cliService   *CLIService
 	timerService *TimerService
 	logger       *logger.Logger
 	storage      *storage.Storage[Schedule]
 }
 
-func NewScheduleService(name, command, interval string) *ScheduleService {
-	if name == "" {
-		name = namegen.GenerateOne()
-	}
+func NewScheduleService() *ScheduleService {
 	return &ScheduleService{
-		id:           utils.GenerateUUID(),
-		name:         name,
-		command:      command,
-		interval:     interval,
-		startTime:    time.Now(),
+		schedule:     &Schedule{},
 		cliService:   NewCLIService(),
 		timerService: NewTimerService(),
-		logger:       logger.NewLogger("  "),
+		logger:       logger.NewLogger("ScheduleService: "),
 		storage:      storage.NewStorage[Schedule]("./data/schedules.json"),
 	}
 }
 
-func (s *ScheduleService) Create() {
-	s.logger.Highlight("creating schedule %s", s.name)
-	s.logger.Info("==> Validating command: %s", s.command)
-	if err := s.cliService.IsValidCommand(s.command, false); err != nil {
-		s.logger.Error("invalid command: %v", err)
-		return
-	}
-	s.logger.Info("==> Validating interval: %s", s.interval)
-	if err := s.timerService.IsValidInterval(s.interval); err != nil {
-		s.logger.Error("invalid interval: %v", err)
-		return
+func getScriptPath(name string) string {
+	return fmt.Sprintf("/usr/local/bin/%s.sh", name)
+}
+
+func getServiceFilePath(name string) string {
+	return fmt.Sprintf("/etc/systemd/system/%s.service", name)
+}
+
+func getTimerFilePath(name string) string {
+	return fmt.Sprintf("/etc/systemd/system/%s.timer", name)
+}
+
+func (s *ScheduleService) Create(name, command, interval string) error {
+	s.logger.Highlight("creating schedule %s", name)
+	if err := s.createSchedule(name, command, interval); err != nil {
+		return err
 	}
 
-	s.logger.Info("==> Creating script...")
-	if err := s.createScript(); err != nil {
-		s.logger.Error("failed to create script: %v", err)
+	if err := s.goCreateFiles(); err != nil {
+		return err
 	}
-	if err := s.giveScriptExecPermission(); err != nil {
-		s.logger.Error("failed to give script exec permission: %v", err)
+	if err := s.goEnableAndStartTimerAndService(); err != nil {
+		return err
 	}
 
-	s.logger.Info("==> Creating service file...")
-	if err := s.createServiceFile(); err != nil {
-		s.logger.Error("failed to create service file: %v", err)
-		return
-	}
-	s.logger.Info("==> Creating timer file...")
-	if err := s.createTimerFile(); err != nil {
-		s.logger.Error("failed to create timer file: %v", err)
-		return
-	}
 	s.logger.Info("==> Reloading systemd...")
 	if err := s.reloadSystemd(); err != nil {
 		s.logger.Error("failed to reload systemd: %v", err)
-		return
-	}
-	s.logger.Info("==> Enabling timer...")
-	if err := s.enableTimer(); err != nil {
-		s.logger.Error("failed to enable timer: %v", err)
-		return
+		return err
 	}
 
 	// Use Upsert with ID as key to create or update
-	if err := s.storage.Upsert(s.id, Schedule{
-		ID:              s.id,
-		Name:            s.name,
-		Command:         s.command,
-		Interval:        s.interval,
-		StartTime:       s.startTime,
-		ServiceFilePath: s.getServiceFilePath(),
-		TimerFilePath:   s.getTimerFilePath(),
-	}); err != nil {
+	if err := s.storage.Upsert(s.schedule.ID, *s.schedule); err != nil {
 		s.logger.Error("failed to upsert schedule: %v", err)
-		return
+		return err
 	}
 
-	s.logger.Success("scheduled task %s successfully", s.name)
+	s.logger.Success("scheduled task %s successfully", s.schedule.Name)
+	return nil
 }
 
-func (s *ScheduleService) List() {
+func (s *ScheduleService) List() error {
 	schedules, err := s.storage.ReadAll()
 	if err != nil {
 		s.logger.Error("failed to get all schedules: %v", err)
-		return
+		return err
 	}
 	if len(schedules) == 0 {
 		s.logger.Info("no scheduled tasks found")
-		return
+		return nil
 	}
 	headers, rows := utils.TransformToTableData(schedules)
 	s.logger.FormatTable(headers, rows)
+	return nil
 }
 
-func (s *ScheduleService) Delete(name string) {
-	s.logger.Highlight("deleting schedule %s", name)
-	
-	// Find schedule by name
-	schedules, err := s.storage.ReadAll()
-	if err != nil {
-		s.logger.Error("failed to get all schedules: %v", err)
-		return
-	}
-	
-	var scheduleToDelete *Schedule
-	var scheduleID string
-	for id, schedule := range schedules {
-		if schedule.Name == name {
-			scheduleToDelete = &schedule
-			scheduleID = id
-			break
-		}
-	}
-	
-	if scheduleToDelete == nil {
-		s.logger.Error("schedule '%s' not found", name)
-		return
-	}
-	
-	// Stop and disable timer
-	s.logger.Info("==> Stopping timer...")
-	if err := s.stopTimer(scheduleToDelete.Name); err != nil {
-		s.logger.Error("failed to stop timer: %v", err)
-	}
-	
-	s.logger.Info("==> Disabling timer...")
-	if err := s.disableTimer(scheduleToDelete.Name); err != nil {
-		s.logger.Error("failed to disable timer: %v", err)
-	}
-	
-	// Stop service
-	s.logger.Info("==> Stopping service...")
-	if err := s.stopService(scheduleToDelete.Name); err != nil {
-		s.logger.Error("failed to stop service: %v", err)
-	}
-	
-	// Delete timer file
-	s.logger.Info("==> Deleting timer file...")
-	if err := s.deleteTimerFile(scheduleToDelete.TimerFilePath); err != nil {
-		s.logger.Error("failed to delete timer file: %v", err)
-	}
-	
-	// Delete service file
-	s.logger.Info("==> Deleting service file...")
-	if err := s.deleteServiceFile(scheduleToDelete.ServiceFilePath); err != nil {
-		s.logger.Error("failed to delete service file: %v", err)
-	}
-	
-	// Delete script file
-	scriptPath := fmt.Sprintf("/usr/local/bin/%s.sh", scheduleToDelete.Name)
-	s.logger.Info("==> Deleting script file...")
-	if err := s.deleteScriptFile(scriptPath); err != nil {
-		s.logger.Error("failed to delete script file: %v", err)
-	}
-	
-	// Reload systemd
-	s.logger.Info("==> Reloading systemd...")
-	if err := s.reloadSystemd(); err != nil {
-		s.logger.Error("failed to reload systemd: %v", err)
-	}
-	
-	// Delete from storage
-	s.logger.Info("==> Removing from storage...")
-	if err := s.storage.Delete(scheduleID); err != nil {
-		s.logger.Error("failed to delete from storage: %v", err)
-		return
-	}
-	
-	s.logger.Success("schedule %s deleted successfully", name)
+func (s *ScheduleService) Delete(name string) error {
+	// TODO: Implement delete schedule
+	return nil
 }
 
-func (s *ScheduleService) getServiceName() string {
-	return s.name
-}
+func (s *ScheduleService) createSchedule(name, command, interval string) error {
+	if err := s.cliService.IsValidCommand(command, false); err != nil {
+		s.logger.Info("==> Validating command: %s", command)
+	}
+	if err := s.cliService.IsValidCommand(command, false); err != nil {
+		s.logger.Error("invalid command: %v", err)
+		return err
+	}
 
-func (s *ScheduleService) getScriptPath() string {
-	return fmt.Sprintf("/usr/local/bin/%s.sh", s.getServiceName())
+	s.logger.Info("==> Validating interval: %s", interval)
+	if err := s.timerService.IsValidInterval(interval); err != nil {
+		s.logger.Error("invalid interval: %v", err)
+		return err
+	}
+
+	if name == "" {
+		name = namegen.GenerateOne()
+	}
+
+	s.schedule = &Schedule{
+		ID:              utils.GenerateUUID(),
+		Name:            name,
+		Command:         command,
+		Interval:        interval,
+		StartTime:       time.Now(),
+		ScriptFilePath:  getScriptPath(name),
+		ServiceFilePath: getServiceFilePath(name),
+		TimerFilePath:   getTimerFilePath(name),
+	}
+	return nil
 }
 
 func (s *ScheduleService) getScriptContent() string {
 	return fmt.Sprintf(`#!/bin/bash
 %s
-`, s.command)
+`, s.schedule.Command)
 }
 
-func (s *ScheduleService) createScript() error {
-	scriptPath := s.getScriptPath()
+func (s *ScheduleService) createScriptFile() error {
+	scriptPath := s.schedule.ScriptFilePath
 	scriptContent := s.getScriptContent()
 	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0644); err != nil {
 		return err
@@ -223,16 +149,27 @@ func (s *ScheduleService) createScript() error {
 	return nil
 }
 
-func (s *ScheduleService) giveScriptExecPermission() error {
-	scriptPath := s.getScriptPath()
-	if err := os.Chmod(scriptPath, 0755); err != nil {
+func (s *ScheduleService) deleteScriptFile() error {
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo rm -f %s", s.schedule.ScriptFilePath),
+		StreamLog: false,
+	})
+	if err != nil {
 		return err
+	}
+	if result.ExitCode != 0 {
+		// File might not exist, which is okay
+		return nil
 	}
 	return nil
 }
 
-func (s *ScheduleService) getServiceFilePath() string {
-	return fmt.Sprintf("/etc/systemd/system/%s.service", s.getServiceName())
+func (s *ScheduleService) giveScriptExecPermission() error {
+	scriptPath := s.schedule.ScriptFilePath
+	if err := os.Chmod(scriptPath, 0755); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *ScheduleService) getServiceContent() string {
@@ -246,11 +183,11 @@ ExecStart=%s
 User=root
 Group=root
 Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-`, s.getServiceName(), s.getScriptPath())
+`, s.schedule.Name, s.schedule.ScriptFilePath)
 }
 
 func (s *ScheduleService) createServiceFile() error {
-	serviceFilePath := s.getServiceFilePath()
+	serviceFilePath := s.schedule.ServiceFilePath
 	serviceContent := s.getServiceContent()
 	if err := os.WriteFile(serviceFilePath, []byte(serviceContent), 0644); err != nil {
 		return err
@@ -258,21 +195,167 @@ func (s *ScheduleService) createServiceFile() error {
 	return nil
 }
 
-func (s *ScheduleService) getTimerFilePath() string {
-	return fmt.Sprintf("/etc/systemd/system/%s.timer", s.getServiceName())
+func (s *ScheduleService) deleteServiceFile() error {
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo rm -f %s", s.schedule.ServiceFilePath),
+		StreamLog: false,
+	})
+	if err != nil {
+		return err
+	}
+	if result.ExitCode != 0 {
+		// File might not exist, which is okay
+		return nil
+	}
+	return nil
 }
 
 func (s *ScheduleService) getTimerContent() string {
 	return fmt.Sprintf(`[Unit]
 Description=%s
-`, s.getServiceName())
+`, s.schedule.Name)
 }
 
 func (s *ScheduleService) createTimerFile() error {
-	timerFilePath := s.getTimerFilePath()
+	timerFilePath := s.schedule.TimerFilePath
 	timerContent := s.getTimerContent()
 	if err := os.WriteFile(timerFilePath, []byte(timerContent), 0644); err != nil {
 		return err
+	}
+	return nil
+}
+
+func (s *ScheduleService) deleteTimerFile() error {
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo rm -f %s", s.schedule.TimerFilePath),
+		StreamLog: false,
+	})
+	if err != nil {
+		return err
+	}
+	if result.ExitCode != 0 {
+		// File might not exist, which is okay
+		return nil
+	}
+	return nil
+}
+
+func (s *ScheduleService) enableTimer() error {
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo systemctl enable --now %s.timer", s.schedule.Name),
+		StreamLog: true,
+	})
+	if err != nil {
+		return err
+	}
+	if result.ExitCode != 0 {
+		s.logger.Error("command exited with code %d: %s", result.ExitCode, result.Stderr)
+		return err
+	}
+	return nil
+}
+
+func (s *ScheduleService) disableTimer() error {
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo systemctl disable %s.timer", s.schedule.Name),
+		StreamLog: true,
+	})
+	if err != nil {
+		return err
+	}
+	if result.ExitCode != 0 {
+		// Timer might not be enabled, which is okay
+		return nil
+	}
+	return nil
+}
+
+func (s *ScheduleService) startTimer() error {
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo systemctl start %s.timer", s.schedule.Name),
+		StreamLog: true,
+	})
+	if err != nil {
+		return err
+	}
+	if result.ExitCode != 0 {
+		// Timer might not be started, which is okay
+		return nil
+	}
+	return nil
+}
+
+func (s *ScheduleService) stopTimer() error {
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo systemctl stop %s.timer", s.schedule.Name),
+		StreamLog: true,
+	})
+	if err != nil {
+		return err
+	}
+	if result.ExitCode != 0 {
+		// Timer might not be running, which is okay
+		return nil
+	}
+	return nil
+}
+
+func (s *ScheduleService) enableService() error {
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo systemctl enable %s.service", s.schedule.Name),
+		StreamLog: true,
+	})
+	if err != nil {
+		return err
+	}
+	if result.ExitCode != 0 {
+		// Service might not be enabled, which is okay
+		return nil
+	}
+	return nil
+}
+
+func (s *ScheduleService) disableService() error {
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo systemctl disable %s.service", s.schedule.Name),
+		StreamLog: true,
+	})
+	if err != nil {
+		return err
+	}
+	if result.ExitCode != 0 {
+		// Service might not be disabled, which is okay
+		return nil
+	}
+	return nil
+}
+
+func (s *ScheduleService) startService() error {
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo systemctl start %s.service", s.schedule.Name),
+		StreamLog: true,
+	})
+	if err != nil {
+		return err
+	}
+	if result.ExitCode != 0 {
+		// Service might not be enabled, which is okay
+		return nil
+	}
+	return nil
+}
+
+func (s *ScheduleService) stopService() error {
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo systemctl stop %s.service", s.schedule.Name),
+		StreamLog: true,
+	})
+	if err != nil {
+		return err
+	}
+	if result.ExitCode != 0 {
+		// Service might not be running, which is okay
+		return nil
 	}
 	return nil
 }
@@ -292,107 +375,153 @@ func (s *ScheduleService) reloadSystemd() error {
 	return nil
 }
 
-func (s *ScheduleService) enableTimer() error {
-	result, err := s.cliService.Execute(ExecuteOptions{
-		Command:   fmt.Sprintf("sudo systemctl enable --now %s.timer", s.getServiceName()),
-		StreamLog: true,
-	})
-	if err != nil {
-		return err
-	}
-	if result.ExitCode != 0 {
-		s.logger.Error("command exited with code %d: %s", result.ExitCode, result.Stderr)
-		return err
-	}
-	return nil
-}
+func (s *ScheduleService) goCreateFiles() error {
+	wg := sync.WaitGroup{}
+	errChan := make(chan error)
 
-func (s *ScheduleService) stopTimer(name string) error {
-	result, err := s.cliService.Execute(ExecuteOptions{
-		Command:   fmt.Sprintf("sudo systemctl stop %s.timer", name),
-		StreamLog: true,
+	wg.Go(func() {
+		s.logger.Info("==> Creating script...")
+		if err := s.createScriptFile(); err != nil {
+			s.logger.Error("failed to create script: %v", err)
+			errChan <- err
+		}
+		if err := s.giveScriptExecPermission(); err != nil {
+			s.logger.Error("failed to give script exec permission: %v", err)
+			errChan <- err
+		}
 	})
-	if err != nil {
+	wg.Go(func() {
+		s.logger.Info("==> Creating service file...")
+		if err := s.createServiceFile(); err != nil {
+			s.logger.Error("failed to create service file: %v", err)
+			errChan <- err
+		}
+	})
+	wg.Go(func() {
+		s.logger.Info("==> Creating timer file...")
+		if err := s.createTimerFile(); err != nil {
+			s.logger.Error("failed to create timer file: %v", err)
+			errChan <- err
+		}
+	})
+
+	wg.Wait()
+	close(errChan)
+	select {
+	case err := <-errChan:
 		return err
-	}
-	if result.ExitCode != 0 {
-		// Timer might not be running, which is okay
+	default:
 		return nil
 	}
-	return nil
 }
 
-func (s *ScheduleService) disableTimer(name string) error {
-	result, err := s.cliService.Execute(ExecuteOptions{
-		Command:   fmt.Sprintf("sudo systemctl disable %s.timer", name),
-		StreamLog: true,
+func (s *ScheduleService) goDeleteFiles() error {
+	wg := sync.WaitGroup{}
+	errChan := make(chan error)
+	wg.Go(func() {
+		s.logger.Info("==> Deleting script file...")
+		if err := s.deleteScriptFile(); err != nil {
+			s.logger.Error("failed to delete script file: %v", err)
+			errChan <- err
+		}
 	})
-	if err != nil {
+	wg.Go(func() {
+		s.logger.Info("==> Deleting service file...")
+		if err := s.deleteServiceFile(); err != nil {
+			s.logger.Error("failed to delete service file: %v", err)
+			errChan <- err
+		}
+	})
+	wg.Go(func() {
+		s.logger.Info("==> Deleting timer file...")
+		if err := s.deleteTimerFile(); err != nil {
+			s.logger.Error("failed to delete timer file: %v", err)
+			errChan <- err
+		}
+	})
+	wg.Wait()
+	close(errChan)
+	select {
+	case err := <-errChan:
 		return err
-	}
-	if result.ExitCode != 0 {
-		// Timer might not be enabled, which is okay
+	default:
 		return nil
 	}
-	return nil
 }
 
-func (s *ScheduleService) stopService(name string) error {
-	result, err := s.cliService.Execute(ExecuteOptions{
-		Command:   fmt.Sprintf("sudo systemctl stop %s.service", name),
-		StreamLog: true,
+func (s *ScheduleService) goEnableAndStartTimerAndService() error {
+	wg := sync.WaitGroup{}
+	errChan := make(chan error)
+
+	wg.Go(func() {
+		s.logger.Info("==> Enabling timer...")
+		if err := s.enableTimer(); err != nil {
+			s.logger.Error("failed to enable timer: %v", err)
+			errChan <- err
+		}
+		s.logger.Info("==> Starting timer...")
+		if err := s.startTimer(); err != nil {
+			s.logger.Error("failed to start timer: %v", err)
+			errChan <- err
+		}
 	})
-	if err != nil {
+	wg.Go(func() {
+		s.logger.Info("==> Enabling service...")
+		if err := s.enableService(); err != nil {
+			s.logger.Error("failed to enable service: %v", err)
+			errChan <- err
+		}
+		s.logger.Info("==> Starting service...")
+		if err := s.startService(); err != nil {
+			s.logger.Error("failed to start service: %v", err)
+			errChan <- err
+		}
+	})
+
+	wg.Wait()
+	close(errChan)
+	select {
+	case err := <-errChan:
 		return err
-	}
-	if result.ExitCode != 0 {
-		// Service might not be running, which is okay
+	default:
 		return nil
 	}
-	return nil
 }
 
-func (s *ScheduleService) deleteTimerFile(filePath string) error {
-	result, err := s.cliService.Execute(ExecuteOptions{
-		Command:   fmt.Sprintf("sudo rm -f %s", filePath),
-		StreamLog: false,
+func (s *ScheduleService) goDisableAndStopTimerAndService() error {
+	wg := sync.WaitGroup{}
+	errChan := make(chan error)
+	wg.Go(func() {
+		s.logger.Info("==> Stopping timer...")
+		if err := s.stopTimer(); err != nil {
+			s.logger.Error("failed to stop timer: %v", err)
+			errChan <- err
+		}
+		s.logger.Info("==> Disabling timer...")
+		if err := s.disableTimer(); err != nil {
+			s.logger.Error("failed to disable timer: %v", err)
+			errChan <- err
+		}
 	})
-	if err != nil {
-		return err
-	}
-	if result.ExitCode != 0 {
-		// File might not exist, which is okay
-		return nil
-	}
-	return nil
-}
+	wg.Go(func() {
+		s.logger.Info("==> Stopping service...")
+		if err := s.stopService(); err != nil {
+			s.logger.Error("failed to stop service: %v", err)
+			errChan <- err
+		}
+		s.logger.Info("==> Disabling service...")
+		if err := s.disableService(); err != nil {
+			s.logger.Error("failed to disable service: %v", err)
+			errChan <- err
+		}
+	})
+	wg.Wait()
+	close(errChan)
 
-func (s *ScheduleService) deleteServiceFile(filePath string) error {
-	result, err := s.cliService.Execute(ExecuteOptions{
-		Command:   fmt.Sprintf("sudo rm -f %s", filePath),
-		StreamLog: false,
-	})
-	if err != nil {
+	select {
+	case err := <-errChan:
 		return err
-	}
-	if result.ExitCode != 0 {
-		// File might not exist, which is okay
+	default:
 		return nil
 	}
-	return nil
-}
-
-func (s *ScheduleService) deleteScriptFile(filePath string) error {
-	result, err := s.cliService.Execute(ExecuteOptions{
-		Command:   fmt.Sprintf("sudo rm -f %s", filePath),
-		StreamLog: false,
-	})
-	if err != nil {
-		return err
-	}
-	if result.ExitCode != 0 {
-		// File might not exist, which is okay
-		return nil
-	}
-	return nil
 }

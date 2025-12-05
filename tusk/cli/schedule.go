@@ -22,8 +22,8 @@ var scheduleCreateCmd = &cobra.Command{
 	Short: "Create a new scheduled task",
 	Long:  `Create a new scheduled task with the specified name, command, and interval.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		scheduleExecutor := executor.NewScheduleExecutor(name, command, interval)
-		scheduleExecutor.Create()
+		scheduleExecutor := executor.NewScheduleExecutor()
+		scheduleExecutor.Create(name, command, interval)
 	},
 }
 
@@ -33,7 +33,7 @@ var scheduleListCmd = &cobra.Command{
 	Short: "List all scheduled tasks",
 	Long:  `List all scheduled tasks with their details.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		scheduleExecutor := executor.NewScheduleExecutor(name, command, interval)
+		scheduleExecutor := executor.NewScheduleExecutor()
 		scheduleExecutor.List()
 	},
 }
@@ -48,7 +48,7 @@ var scheduleDeleteCmd = &cobra.Command{
 			cmd.Help()
 			return
 		}
-		scheduleExecutor := executor.NewScheduleExecutor(name, command, interval)
+		scheduleExecutor := executor.NewScheduleExecutor()
 		scheduleExecutor.Delete(name)
 	},
 }
@@ -66,7 +66,7 @@ func init() {
 
 	// Add list subcommand
 	scheduleCmd.AddCommand(scheduleListCmd)
-	
+
 	// Add delete subcommand
 	scheduleCmd.AddCommand(scheduleDeleteCmd)
 	scheduleDeleteCmd.Flags().StringVarP(&name, "name", "n", "", "name of the schedule to delete")
