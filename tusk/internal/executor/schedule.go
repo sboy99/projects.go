@@ -17,3 +17,7 @@ func (e *ScheduleExecutor) Create() {
 func (e *ScheduleExecutor) List() {
 	e.scheduleService.List()
 }
+
+func (e *ScheduleExecutor) Delete(name string) {
+	e.scheduleService.Delete(name)
+}

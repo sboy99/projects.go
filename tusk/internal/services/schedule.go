@@ -123,6 +123,83 @@ func (s *ScheduleService) List() {
 	s.logger.FormatTable(headers, rows)
 }
 
+func (s *ScheduleService) Delete(name string) {
+	s.logger.Highlight("deleting schedule %s", name)
+	
+	// Find schedule by name
+	schedules, err := s.storage.ReadAll()
+	if err != nil {
+		s.logger.Error("failed to get all schedules: %v", err)
+		return
+	}
+	
+	var scheduleToDelete *Schedule
+	var scheduleID string
+	for id, schedule := range schedules {
+		if schedule.Name == name {
+			scheduleToDelete = &schedule
+			scheduleID = id
+			break
+		}
+	}
+	
+	if scheduleToDelete == nil {
+		s.logger.Error("schedule '%s' not found", name)
+		return
+	}
+	
+	// Stop and disable timer
+	s.logger.Info("==> Stopping timer...")
+	if err := s.stopTimer(scheduleToDelete.Name); err != nil {
+		s.logger.Error("failed to stop timer: %v", err)
+	}
+	
+	s.logger.Info("==> Disabling timer...")
+	if err := s.disableTimer(scheduleToDelete.Name); err != nil {
+		s.logger.Error("failed to disable timer: %v", err)
+	}
+	
+	// Stop service
+	s.logger.Info("==> Stopping service...")
+	if err := s.stopService(scheduleToDelete.Name); err != nil {
+		s.logger.Error("failed to stop service: %v", err)
+	}
+	
+	// Delete timer file
+	s.logger.Info("==> Deleting timer file...")
+	if err := s.deleteTimerFile(scheduleToDelete.TimerFilePath); err != nil {
+		s.logger.Error("failed to delete timer file: %v", err)
+	}
+	
+	// Delete service file
+	s.logger.Info("==> Deleting service file...")
+	if err := s.deleteServiceFile(scheduleToDelete.ServiceFilePath); err != nil {
+		s.logger.Error("failed to delete service file: %v", err)
+	}
+	
+	// Delete script file
+	scriptPath := fmt.Sprintf("/usr/local/bin/%s.sh", scheduleToDelete.Name)
+	s.logger.Info("==> Deleting script file...")
+	if err := s.deleteScriptFile(scriptPath); err != nil {
+		s.logger.Error("failed to delete script file: %v", err)
+	}
+	
+	// Reload systemd
+	s.logger.Info("==> Reloading systemd...")
+	if err := s.reloadSystemd(); err != nil {
+		s.logger.Error("failed to reload systemd: %v", err)
+	}
+	
+	// Delete from storage
+	s.logger.Info("==> Removing from storage...")
+	if err := s.storage.Delete(scheduleID); err != nil {
+		s.logger.Error("failed to delete from storage: %v", err)
+		return
+	}
+	
+	s.logger.Success("schedule %s deleted successfully", name)
+}
+
 func (s *ScheduleService) getServiceName() string {
 	return s.name
 }
@@ -226,6 +303,96 @@ func (s *ScheduleService) enableTimer() error {
 	if result.ExitCode != 0 {
 		s.logger.Error("command exited with code %d: %s", result.ExitCode, result.Stderr)
 		return err
+	}
+	return nil
+}
+
+func (s *ScheduleService) stopTimer(name string) error {
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo systemctl stop %s.timer", name),
+		StreamLog: true,
+	})
+	if err != nil {
+		return err
+	}
+	if result.ExitCode != 0 {
+		// Timer might not be running, which is okay
+		return nil
+	}
+	return nil
+}
+
+func (s *ScheduleService) disableTimer(name string) error {
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo systemctl disable %s.timer", name),
+		StreamLog: true,
+	})
+	if err != nil {
+		return err
+	}
+	if result.ExitCode != 0 {
+		// Timer might not be enabled, which is okay
+		return nil
+	}
+	return nil
+}
+
+func (s *ScheduleService) stopService(name string) error {
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo systemctl stop %s.service", name),
+		StreamLog: true,
+	})
+	if err != nil {
+		return err
+	}
+	if result.ExitCode != 0 {
+		// Service might not be running, which is okay
+		return nil
+	}
+	return nil
+}
+
+func (s *ScheduleService) deleteTimerFile(filePath string) error {
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo rm -f %s", filePath),
+		StreamLog: false,
+	})
+	if err != nil {
+		return err
+	}
+	if result.ExitCode != 0 {
+		// File might not exist, which is okay
+		return nil
+	}
+	return nil
+}
+
+func (s *ScheduleService) deleteServiceFile(filePath string) error {
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo rm -f %s", filePath),
+		StreamLog: false,
+	})
+	if err != nil {
+		return err
+	}
+	if result.ExitCode != 0 {
+		// File might not exist, which is okay
+		return nil
+	}
+	return nil
+}
+
+func (s *ScheduleService) deleteScriptFile(filePath string) error {
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo rm -f %s", filePath),
+		StreamLog: false,
+	})
+	if err != nil {
+		return err
+	}
+	if result.ExitCode != 0 {
+		// File might not exist, which is okay
+		return nil
 	}
 	return nil
 }

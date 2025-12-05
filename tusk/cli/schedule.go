@@ -38,6 +38,21 @@ var scheduleListCmd = &cobra.Command{
 	},
 }
 
+// scheduleDeleteCmd represents the schedule delete command
+var scheduleDeleteCmd = &cobra.Command{
+	Use:   "delete",
+	Short: "Delete a scheduled task",
+	Long:  `Delete a scheduled task by name. This will stop and disable the timer, delete all associated files, and remove the entry from storage.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		if name == "" {
+			cmd.Help()
+			return
+		}
+		scheduleExecutor := executor.NewScheduleExecutor(name, command, interval)
+		scheduleExecutor.Delete(name)
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(scheduleCmd)
 
@@ -51,4 +66,9 @@ func init() {
 
 	// Add list subcommand
 	scheduleCmd.AddCommand(scheduleListCmd)
+	
+	// Add delete subcommand
+	scheduleCmd.AddCommand(scheduleDeleteCmd)
+	scheduleDeleteCmd.Flags().StringVarP(&name, "name", "n", "", "name of the schedule to delete")
+	scheduleDeleteCmd.MarkFlagRequired("name")
 }

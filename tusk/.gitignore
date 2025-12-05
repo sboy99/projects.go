@@ -41,3 +41,8 @@ config.yaml
 # Logs
 *.log
 
+# Tasks
+data
+
+# Others
+TASKS.md
