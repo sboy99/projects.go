@@ -98,7 +98,24 @@ func (s *ScheduleService) List() error {
 }
 
 func (s *ScheduleService) Delete(name string) error {
-	// TODO: Implement delete schedule
+	schedule, err := s.getScheduleByName(name)
+	if err != nil {
+		return err
+	}
+	if schedule == nil {
+		s.logger.Error("schedule not found")
+		return nil
+	}
+	if err := s.goDisableAndStopTimerAndService(); err != nil {
+		return err
+	}
+	if err := s.goDeleteFiles(); err != nil {
+		return err
+	}
+	if err := s.storage.Delete(schedule.ID); err != nil {
+		return err
+	}
+	s.logger.Success("deleted schedule %s successfully", name)
 	return nil
 }
 
@@ -143,8 +160,33 @@ func (s *ScheduleService) getScriptContent() string {
 func (s *ScheduleService) createScriptFile() error {
 	scriptPath := s.schedule.ScriptFilePath
 	scriptContent := s.getScriptContent()
-	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0644); err != nil {
+
+	// Create a temporary file
+	tmpFile, err := os.CreateTemp("", "tusk-script-*.sh")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	// Write content to temp file
+	if _, err := tmpFile.WriteString(scriptContent); err != nil {
+		return fmt.Errorf("failed to write to temp file: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+
+	// Use sudo to copy temp file to destination
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo cp %s %s", tmpFile.Name(), scriptPath),
+		StreamLog: false,
+	})
+	if err != nil {
 		return err
+	}
+	if result.ExitCode != 0 {
+		return fmt.Errorf("failed to create script file: %s", result.Stderr)
 	}
 	return nil
 }
@@ -166,8 +208,15 @@ func (s *ScheduleService) deleteScriptFile() error {
 
 func (s *ScheduleService) giveScriptExecPermission() error {
 	scriptPath := s.schedule.ScriptFilePath
-	if err := os.Chmod(scriptPath, 0755); err != nil {
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo chmod 755 %s", scriptPath),
+		StreamLog: false,
+	})
+	if err != nil {
 		return err
+	}
+	if result.ExitCode != 0 {
+		return fmt.Errorf("failed to set script permissions: %s", result.Stderr)
 	}
 	return nil
 }
@@ -189,8 +238,33 @@ Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 func (s *ScheduleService) createServiceFile() error {
 	serviceFilePath := s.schedule.ServiceFilePath
 	serviceContent := s.getServiceContent()
-	if err := os.WriteFile(serviceFilePath, []byte(serviceContent), 0644); err != nil {
+
+	// Create a temporary file
+	tmpFile, err := os.CreateTemp("", "tusk-service-*.service")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	// Write content to temp file
+	if _, err := tmpFile.WriteString(serviceContent); err != nil {
+		return fmt.Errorf("failed to write to temp file: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+
+	// Use sudo to copy temp file to destination
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo cp %s %s", tmpFile.Name(), serviceFilePath),
+		StreamLog: false,
+	})
+	if err != nil {
 		return err
+	}
+	if result.ExitCode != 0 {
+		return fmt.Errorf("failed to create service file: %s", result.Stderr)
 	}
 	return nil
 }
@@ -219,8 +293,33 @@ Description=%s
 func (s *ScheduleService) createTimerFile() error {
 	timerFilePath := s.schedule.TimerFilePath
 	timerContent := s.getTimerContent()
-	if err := os.WriteFile(timerFilePath, []byte(timerContent), 0644); err != nil {
+
+	// Create a temporary file
+	tmpFile, err := os.CreateTemp("", "tusk-timer-*.timer")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	// Write content to temp file
+	if _, err := tmpFile.WriteString(timerContent); err != nil {
+		return fmt.Errorf("failed to write to temp file: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+
+	// Use sudo to copy temp file to destination
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo cp %s %s", tmpFile.Name(), timerFilePath),
+		StreamLog: false,
+	})
+	if err != nil {
 		return err
+	}
+	if result.ExitCode != 0 {
+		return fmt.Errorf("failed to create timer file: %s", result.Stderr)
 	}
 	return nil
 }
@@ -524,4 +623,17 @@ func (s *ScheduleService) goDisableAndStopTimerAndService() error {
 	default:
 		return nil
 	}
+}
+
+func (s *ScheduleService) getScheduleByName(name string) (*Schedule, error) {
+	schedules, err := s.storage.ReadAll()
+	if err != nil {
+		return nil, err
+	}
+	for _, schedule := range schedules {
+		if schedule.Name == name {
+			return &schedule, nil
+		}
+	}
+	return nil, nil
 }
