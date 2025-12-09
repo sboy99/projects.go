@@ -54,7 +54,6 @@ func getTimerFilePath(name string) string {
 }
 
 func (s *ScheduleService) Create(name, command, interval string) error {
-	s.logger.Highlight("creating schedule %s", name)
 	if err := s.createSchedule(name, command, interval); err != nil {
 		return err
 	}
@@ -138,6 +137,7 @@ func (s *ScheduleService) createSchedule(name, command, interval string) error {
 		name = namegen.GenerateOne()
 	}
 
+	s.logger.Highlight("creating schedule %s", name)
 	s.schedule = &Schedule{
 		ID:              utils.GenerateUUID(),
 		Name:            name,
