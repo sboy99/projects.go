@@ -1,10 +1,14 @@
-name: Build and Release
+name: Build and Release [Tusk]
 
 on:
   push:
+    paths:
+      - 'tusk/**'
     tags:
       - 'v*'
   workflow_dispatch:
+    paths:
+      - 'tusk/**'
     inputs:
       version:
         description: 'Version to build (e.g., v1.0.0)'
