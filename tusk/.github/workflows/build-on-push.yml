@@ -1,0 +1,102 @@
+name: Build on Push
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build for ${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            goos: linux
+            goarch: amd64
+          - os: linux
+            arch: arm64
+            goos: linux
+            goarch: arm64
+          - os: darwin
+            arch: amd64
+            goos: darwin
+            goarch: amd64
+          - os: darwin
+            arch: arm64
+            goos: darwin
+            goarch: arm64
+          # - os: windows
+          #   arch: amd64
+          #   goos: windows
+          #   goarch: amd64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.4'
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev-$(git rev-parse --short HEAD)")
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}"
+
+      - name: Get commit hash
+        id: commit
+        run: |
+          COMMIT=$(git rev-parse --short HEAD)
+          echo "commit=${COMMIT}" >> $GITHUB_OUTPUT
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          VERSION: ${{ steps.version.outputs.version }}
+          COMMIT: ${{ steps.commit.outputs.commit }}
+        run: |
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          LDFLAGS="-X github.com/sboy99/projects.go/tusk/internal/version.BuildVersion=${VERSION}"
+          LDFLAGS="${LDFLAGS} -X github.com/sboy99/projects.go/tusk/internal/version.BuildCommit=${COMMIT}"
+          LDFLAGS="${LDFLAGS} -X github.com/sboy99/projects.go/tusk/internal/version.BuildTime=${BUILD_TIME}"
+          
+          OUTPUT_NAME="tusk"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            OUTPUT_NAME="tusk.exe"
+          fi
+          
+          OUTPUT_PATH="dist/tusk-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}/${OUTPUT_NAME}"
+          mkdir -p "dist/tusk-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          
+          go build -ldflags "${LDFLAGS}" -o "${OUTPUT_PATH}" ./cmd/tusk
+          
+          echo "Built: ${OUTPUT_PATH}"
+
+      - name: Create checksum
+        run: |
+          cd "dist/tusk-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            sha256sum tusk.exe > tusk.exe.sha256
+          else
+            sha256sum tusk > tusk.sha256
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tusk-${{ steps.version.outputs.version }}-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/tusk-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}/*
+          retention-days: 7
+

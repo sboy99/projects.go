@@ -1,0 +1,161 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: Build for ${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            goos: linux
+            goarch: amd64
+          - os: linux
+            arch: arm64
+            goos: linux
+            goarch: arm64
+          - os: darwin
+            arch: amd64
+            goos: darwin
+            goarch: amd64
+          - os: darwin
+            arch: arm64
+            goos: darwin
+            goarch: arm64
+          - os: windows
+            arch: amd64
+            goos: windows
+            goarch: amd64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.4'
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}"
+
+      - name: Get commit hash
+        id: commit
+        run: |
+          COMMIT=$(git rev-parse --short HEAD)
+          echo "commit=${COMMIT}" >> $GITHUB_OUTPUT
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          VERSION: ${{ steps.version.outputs.version }}
+          COMMIT: ${{ steps.commit.outputs.commit }}
+          BUILD_TIME: ${{ github.event.head_commit.timestamp || github.event.repository.updated_at }}
+        run: |
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          LDFLAGS="-X github.com/sboy99/projects.go/tusk/internal/version.BuildVersion=${VERSION}"
+          LDFLAGS="${LDFLAGS} -X github.com/sboy99/projects.go/tusk/internal/version.BuildCommit=${COMMIT}"
+          LDFLAGS="${LDFLAGS} -X github.com/sboy99/projects.go/tusk/internal/version.BuildTime=${BUILD_TIME}"
+          
+          OUTPUT_NAME="tusk"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            OUTPUT_NAME="tusk.exe"
+          fi
+          
+          OUTPUT_PATH="dist/tusk-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}/${OUTPUT_NAME}"
+          mkdir -p "dist/tusk-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          
+          go build -ldflags "${LDFLAGS}" -o "${OUTPUT_PATH}" ./cmd/tusk
+          
+          echo "Built: ${OUTPUT_PATH}"
+
+      - name: Create checksum
+        run: |
+          cd "dist/tusk-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            sha256sum tusk.exe > tusk.exe.sha256
+          else
+            sha256sum tusk > tusk.sha256
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tusk-${{ steps.version.outputs.version }}-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/tusk-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}/*
+          retention-days: 30
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Create release archive
+        run: |
+          cd dist
+          for dir in tusk-${{ steps.version.outputs.version }}-*; do
+            if [ -d "$dir" ]; then
+              if [[ "$dir" == *"windows"* ]]; then
+                cd "$dir"
+                zip -r "../${dir}.zip" .
+                cd ..
+                echo "Created ${dir}.zip"
+              else
+                tar -czf "${dir}.tar.gz" -C "$dir" .
+                echo "Created ${dir}.tar.gz"
+              fi
+            fi
+          done
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*.tar.gz dist/*.zip dist/*/*.sha256
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
