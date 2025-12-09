@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/fatih/color"
 )
 
 // Formatter provides formatting utilities
@@ -52,9 +54,24 @@ func (f *Formatter) FormatTable(headers []string, rows [][]string) string {
 func (f *Formatter) FormatOutput(prefix, line string, isStdout bool) {
 	if isStdout {
 		// Format stdout with prefix
-		fmt.Printf("%s[%s] %s\n", f.Indent, prefix, line)
+		color.New(color.FgGreen).Printf("%s[%s] %s\n", f.Indent, prefix, line)
 	} else {
 		// Format stderr with prefix (could use different formatting)
-		fmt.Fprintf(os.Stderr, "%s[%s] %s\n", f.Indent, prefix, line)
+		color.New(color.FgRed).Fprintf(os.Stderr, "%s[%s] %s\n", f.Indent, prefix, line)
 	}
+}
+
+func (f *Formatter) FormatHighlight(line string) {
+	color.New(color.FgYellow).Printf("========================%s========================\n", line)
+}
+
+// FormatError formats an error message with prefix
+func (f *Formatter) FormatError(prefix, line string) {
+	// Format stderr with prefix (could use different formatting)
+	color.New(color.FgRed).Fprintf(os.Stderr, "%s[%s] %s\n", f.Indent, prefix, line)
+}
+
+// FormatSuccess formats a success message with prefix
+func (f *Formatter) FormatSuccess(prefix, line string) {
+	color.New(color.FgGreen).Printf("%s[%s] %s\n", f.Indent, prefix, line)
 }

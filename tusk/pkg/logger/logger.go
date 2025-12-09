@@ -54,8 +54,7 @@ func (l *Logger) Debug(format string, args ...any) {
 func (l *Logger) Highlight(format string, args ...any) {
 	if l.level <= LevelInfo {
 		message := fmt.Sprintf(format, args...)
-		borderedMessage := fmt.Sprintf("=================%s=================", message)
-		l.log("", borderedMessage, false)
+		l.formatter.FormatHighlight(message)
 	}
 }
 
@@ -106,9 +105,9 @@ func (l *Logger) log(level, message string, isError bool) {
 	}
 
 	if isError {
-		l.formatter.FormatOutput(tag, message, false)
+		l.formatter.FormatError(tag, message)
 	} else {
-		l.formatter.FormatOutput(tag, message, true)
+		l.formatter.FormatSuccess(tag, message)
 	}
 }
 
@@ -126,9 +125,9 @@ func (l *Logger) Println(args ...any) {
 // Output logs a message with a custom tag/prefix
 func (l *Logger) Output(tag, message string, isError bool) {
 	if isError {
-		l.formatter.FormatOutput(tag, message, false)
+		l.formatter.FormatError(tag, message)
 	} else {
-		l.formatter.FormatOutput(tag, message, true)
+		l.formatter.FormatSuccess(tag, message)
 	}
 }
 
