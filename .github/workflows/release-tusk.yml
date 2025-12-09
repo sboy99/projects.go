@@ -38,10 +38,10 @@ jobs:
             arch: arm64
             goos: darwin
             goarch: arm64
-          - os: windows
-            arch: amd64
-            goos: windows
-            goarch: amd64
+          # - os: windows
+          #   arch: amd64
+          #   goos: windows
+          #   goarch: amd64
 
     steps:
       - name: Checkout code
@@ -56,6 +56,7 @@ jobs:
 
       - name: Get version
         id: version
+        working-directory: tusk
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ github.event.inputs.version }}"
@@ -67,11 +68,13 @@ jobs:
 
       - name: Get commit hash
         id: commit
+        working-directory: tusk
         run: |
           COMMIT=$(git rev-parse --short HEAD)
           echo "commit=${COMMIT}" >> $GITHUB_OUTPUT
 
       - name: Build binary
+        working-directory: tusk
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
@@ -97,6 +100,7 @@ jobs:
           echo "Built: ${OUTPUT_PATH}"
 
       - name: Create checksum
+        working-directory: tusk
         run: |
           cd "dist/tusk-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}"
           if [ "${{ matrix.goos }}" = "windows" ]; then
@@ -109,7 +113,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tusk-${{ steps.version.outputs.version }}-${{ matrix.os }}-${{ matrix.arch }}
-          path: dist/tusk-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}/*
+          path: tusk/dist/tusk-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}/*
           retention-days: 30
 
   release:
@@ -152,11 +156,13 @@ jobs:
               fi
             fi
           done
+          # Also include checksum files
+          find . -name "*.sha256" -exec cp {} . \;
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/*.tar.gz dist/*.zip dist/*/*.sha256
+          files: dist/*.tar.gz dist/*.zip dist/*.sha256
           generate_release_notes: true
           draft: false
           prerelease: false

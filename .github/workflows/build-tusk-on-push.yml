@@ -53,6 +53,7 @@ jobs:
 
       - name: Get version
         id: version
+        working-directory: tusk
         run: |
           VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev-$(git rev-parse --short HEAD)")
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
@@ -60,11 +61,13 @@ jobs:
 
       - name: Get commit hash
         id: commit
+        working-directory: tusk
         run: |
           COMMIT=$(git rev-parse --short HEAD)
           echo "commit=${COMMIT}" >> $GITHUB_OUTPUT
 
       - name: Build binary
+        working-directory: tusk
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
@@ -89,6 +92,7 @@ jobs:
           echo "Built: ${OUTPUT_PATH}"
 
       - name: Create checksum
+        working-directory: tusk
         run: |
           cd "dist/tusk-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}"
           if [ "${{ matrix.goos }}" = "windows" ]; then
@@ -101,6 +105,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tusk-${{ steps.version.outputs.version }}-${{ matrix.os }}-${{ matrix.arch }}
-          path: dist/tusk-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}/*
+          path: tusk/dist/tusk-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}/*
           retention-days: 7
 
