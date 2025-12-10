@@ -57,26 +57,18 @@ func (s *ScheduleService) Create(name, command, interval string) error {
 	if err := s.createSchedule(name, command, interval); err != nil {
 		return err
 	}
-
 	if err := s.goCreateFiles(); err != nil {
+		return err
+	}
+	if err := s.reloadSystemd(); err != nil {
 		return err
 	}
 	if err := s.goEnableAndStartTimerAndService(); err != nil {
 		return err
 	}
-
-	s.logger.Info("==> Reloading systemd...")
-	if err := s.reloadSystemd(); err != nil {
-		s.logger.Error("failed to reload systemd: %v", err)
+	if err := s.saveScheduleToStorage(); err != nil {
 		return err
 	}
-
-	// Use Upsert with ID as key to create or update
-	if err := s.storage.Upsert(s.schedule.ID, *s.schedule); err != nil {
-		s.logger.Error("failed to upsert schedule: %v", err)
-		return err
-	}
-
 	s.logger.Success("scheduled task %s successfully", s.schedule.Name)
 	return nil
 }
@@ -111,7 +103,10 @@ func (s *ScheduleService) Delete(name string) error {
 	if err := s.goDeleteFiles(); err != nil {
 		return err
 	}
-	if err := s.storage.Delete(schedule.ID); err != nil {
+	if err := s.reloadSystemd(); err != nil {
+		return err
+	}
+	if err := s.deleteScheduleFromStorage(); err != nil {
 		return err
 	}
 	s.logger.Success("deleted schedule %s successfully", name)
@@ -232,6 +227,9 @@ ExecStart=%s
 User=root
 Group=root
 Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+[Install]
+WantedBy=multi-user.target
 `, s.schedule.Name, s.schedule.ScriptFilePath)
 }
 
@@ -285,9 +283,17 @@ func (s *ScheduleService) deleteServiceFile() error {
 }
 
 func (s *ScheduleService) getTimerContent() string {
+	timerConfig := s.timerService.convertIntervalToSystemdTimer(s.schedule.Interval)
 	return fmt.Sprintf(`[Unit]
 Description=%s
-`, s.schedule.Name)
+Requires=%s.service
+
+[Timer]
+%s
+
+[Install]
+WantedBy=timers.target
+`, s.schedule.Name, s.schedule.Name, timerConfig)
 }
 
 func (s *ScheduleService) createTimerFile() error {
@@ -460,6 +466,7 @@ func (s *ScheduleService) stopService() error {
 }
 
 func (s *ScheduleService) reloadSystemd() error {
+	s.logger.Highlight("Reloading systemd")
 	result, err := s.cliService.Execute(ExecuteOptions{
 		Command:   "sudo systemctl daemon-reload",
 		StreamLog: true,
@@ -475,6 +482,7 @@ func (s *ScheduleService) reloadSystemd() error {
 }
 
 func (s *ScheduleService) goCreateFiles() error {
+	s.logger.Highlight("Creating files")
 	wg := sync.WaitGroup{}
 	errChan := make(chan error)
 
@@ -515,6 +523,7 @@ func (s *ScheduleService) goCreateFiles() error {
 }
 
 func (s *ScheduleService) goDeleteFiles() error {
+	s.logger.Highlight("Deleting files")
 	wg := sync.WaitGroup{}
 	errChan := make(chan error)
 	wg.Go(func() {
@@ -549,6 +558,7 @@ func (s *ScheduleService) goDeleteFiles() error {
 }
 
 func (s *ScheduleService) goEnableAndStartTimerAndService() error {
+	s.logger.Highlight("Enabling and starting timer and service")
 	wg := sync.WaitGroup{}
 	errChan := make(chan error)
 
@@ -588,6 +598,7 @@ func (s *ScheduleService) goEnableAndStartTimerAndService() error {
 }
 
 func (s *ScheduleService) goDisableAndStopTimerAndService() error {
+	s.logger.Highlight("Disabling and stopping timer and service")
 	wg := sync.WaitGroup{}
 	errChan := make(chan error)
 	wg.Go(func() {
@@ -636,4 +647,22 @@ func (s *ScheduleService) getScheduleByName(name string) (*Schedule, error) {
 		}
 	}
 	return nil, nil
+}
+
+func (s *ScheduleService) saveScheduleToStorage() error {
+	s.logger.Highlight("Saving schedule to storage")
+	if err := s.storage.Upsert(s.schedule.ID, *s.schedule); err != nil {
+		s.logger.Error("failed to upsert schedule: %v", err)
+		return err
+	}
+	return nil
+}
+
+func (s *ScheduleService) deleteScheduleFromStorage() error {
+	s.logger.Highlight("Deleting schedule from storage")
+	if err := s.storage.Delete(s.schedule.ID); err != nil {
+		s.logger.Error("failed to delete schedule: %v", err)
+		return err
+	}
+	return nil
 }
