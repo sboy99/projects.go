@@ -165,15 +165,33 @@ jobs:
                 tar -czf "${dir}.tar.gz" -C "$dir" .
                 echo "Created ${dir}.tar.gz"
               fi
+              # Copy checksum files to dist root
+              if ls "$dir"/*.sha256 1> /dev/null 2>&1; then
+                cp "$dir"/*.sha256 .
+              fi
             fi
           done
-          # Also include checksum files
-          find . -name "*.sha256" -exec cp {} . \;
+
+      - name: Prepare release files list
+        id: prepare_files
+        run: |
+          cd dist
+          FILE_LIST=""
+          for file in *.tar.gz *.zip *.sha256; do
+            if [ -f "$file" ]; then
+              FILE_LIST="${FILE_LIST}dist/${file}"$'\n'
+            fi
+          done
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          echo -n "$FILE_LIST" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "Files to upload:"
+          echo "$FILE_LIST"
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/*.tar.gz dist/*.zip dist/*.sha256
+          files: ${{ steps.prepare_files.outputs.files }}
           generate_release_notes: true
           draft: false
           prerelease: false
