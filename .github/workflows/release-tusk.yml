@@ -2,18 +2,23 @@ name: Build and Release [Tusk]
 
 on:
   push:
+    branches:
+      - main
     paths:
       - 'tusk/**'
     tags:
       - 'v*'
   workflow_dispatch:
-    paths:
-      - 'tusk/**'
     inputs:
       version:
         description: 'Version to build (e.g., v1.0.0)'
         required: true
         type: string
+      create_release:
+        description: 'Create a GitHub Release'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -120,7 +125,9 @@ jobs:
     name: Create Release
     needs: build
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    if: |
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
     permissions:
       contents: write
 
@@ -131,7 +138,11 @@ jobs:
       - name: Get version
         id: version
         run: |
-          VERSION="${GITHUB_REF#refs/tags/}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Version: ${VERSION}"
 
