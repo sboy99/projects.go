@@ -113,13 +113,13 @@ func (l *Logger) log(level, message string, isError bool) {
 
 // Printf logs a formatted message at info level
 func (l *Logger) Printf(format string, args ...any) {
-	l.Info(format, args...)
+	fmt.Printf(format, args...)
 }
 
 // Println logs a message at info level
 func (l *Logger) Println(args ...any) {
 	message := fmt.Sprint(args...)
-	l.Info("%s", message)
+	fmt.Println(message)
 }
 
 // Output logs a message with a custom tag/prefix
