@@ -29,25 +29,69 @@ func (f *Formatter) FormatList(items []string) string {
 	return sb.String()
 }
 
-// FormatTable formats data as a table
-func (f *Formatter) FormatTable(headers []string, rows [][]string) string {
+// FormatTable formats data as a table (Docker-style)
+func (f *Formatter) FormatTable(headers []string, rows [][]string) {
+	if len(headers) == 0 {
+		return
+	}
+
+	// Calculate column widths
+	colWidths := make([]int, len(headers))
+	for i, header := range headers {
+		colWidths[i] = len(header)
+	}
+
+	// Find maximum width for each column
+	for _, row := range rows {
+		for i, cell := range row {
+			if i < len(colWidths) {
+				if len(cell) > colWidths[i] {
+					colWidths[i] = len(cell)
+				}
+			}
+		}
+	}
+
+	// Add padding (minimum 2 spaces between columns)
+	for i := range colWidths {
+		colWidths[i] += 2
+	}
+
 	var sb strings.Builder
 
 	// Write headers
-	sb.WriteString(strings.Join(headers, "\t"))
+	for i, header := range headers {
+		if i > 0 {
+			sb.WriteString("  ") // 2 spaces between columns
+		}
+		sb.WriteString(fmt.Sprintf("%-*s", colWidths[i], header))
+	}
 	sb.WriteString("\n")
 
-	// Write separator
-	sb.WriteString(strings.Repeat("-", len(strings.Join(headers, "\t"))))
+	// Write separator (Docker-style: spaces and dashes)
+	for i, width := range colWidths {
+		if i > 0 {
+			sb.WriteString("  ")
+		}
+		sb.WriteString(strings.Repeat("-", width))
+	}
 	sb.WriteString("\n")
 
 	// Write rows
 	for _, row := range rows {
-		sb.WriteString(strings.Join(row, "\t"))
+		for i, cell := range row {
+			if i >= len(colWidths) {
+				break
+			}
+			if i > 0 {
+				sb.WriteString("  ") // 2 spaces between columns
+			}
+			sb.WriteString(fmt.Sprintf("%-*s", colWidths[i], cell))
+		}
 		sb.WriteString("\n")
 	}
 
-	return sb.String()
+	fmt.Print(sb.String())
 }
 
 // FormatOutput formats CLI output with prefix and color coding
@@ -62,7 +106,7 @@ func (f *Formatter) FormatOutput(prefix, line string, isStdout bool) {
 }
 
 func (f *Formatter) FormatHighlight(line string) {
-	color.New(color.FgYellow).Printf("========================%s========================\n", line)
+	color.New(color.FgMagenta).Printf("========================%s========================\n", line)
 }
 
 // FormatError formats an error message with prefix
@@ -74,4 +118,16 @@ func (f *Formatter) FormatError(prefix, line string) {
 // FormatSuccess formats a success message with prefix
 func (f *Formatter) FormatSuccess(prefix, line string) {
 	color.New(color.FgGreen).Printf("%s[%s] %s\n", f.Indent, prefix, line)
+}
+
+func (f *Formatter) FormatInfo(prefix, line string) {
+	color.New(color.FgBlue).Printf("%s[%s] %s\n", f.Indent, prefix, line)
+}
+
+func (f *Formatter) FormatWarning(prefix, line string) {
+	color.New(color.FgYellow).Printf("%s[%s] %s\n", f.Indent, prefix, line)
+}
+
+func (f *Formatter) FormatDebug(prefix, line string) {
+	color.New(color.FgWhite).Printf("%s[%s] %s\n", f.Indent, prefix, line)
 }

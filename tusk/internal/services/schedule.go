@@ -83,7 +83,7 @@ func (s *ScheduleService) List() error {
 		s.logger.Info("no scheduled tasks found")
 		return nil
 	}
-	headers, rows := utils.TransformToTableData(schedules)
+	headers, rows := utils.TransformToTableData(schedules, "Name", "Command", "Interval", "StartTime")
 	s.logger.FormatTable(headers, rows)
 	return nil
 }
