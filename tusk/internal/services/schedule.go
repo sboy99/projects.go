@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -97,6 +98,8 @@ func (s *ScheduleService) Delete(name string) error {
 		s.logger.Error("schedule not found")
 		return nil
 	}
+	// Set the schedule so subsequent operations can use it
+	s.schedule = schedule
 	if err := s.goDisableAndStopTimerAndService(); err != nil {
 		return err
 	}
@@ -360,10 +363,25 @@ func (s *ScheduleService) enableTimer() error {
 	return nil
 }
 
-func (s *ScheduleService) disableTimer() error {
+func (s *ScheduleService) isTimerEnabled() bool {
 	result, err := s.cliService.Execute(ExecuteOptions{
-		Command:   fmt.Sprintf("sudo systemctl disable %s.timer", s.schedule.Name),
-		StreamLog: true,
+		Command:   fmt.Sprintf("sudo systemctl is-enabled %s.timer 2>/dev/null", s.schedule.Name),
+		StreamLog: false,
+	})
+	if err != nil || result.ExitCode != 0 {
+		return false
+	}
+	return strings.TrimSpace(result.Stdout) == "enabled"
+}
+
+func (s *ScheduleService) disableTimer() error {
+	// Only disable if it's enabled
+	if !s.isTimerEnabled() {
+		return nil
+	}
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo systemctl disable --quiet %s.timer 2>/dev/null", s.schedule.Name),
+		StreamLog: false,
 	})
 	if err != nil {
 		return err
@@ -390,10 +408,25 @@ func (s *ScheduleService) startTimer() error {
 	return nil
 }
 
-func (s *ScheduleService) stopTimer() error {
+func (s *ScheduleService) isTimerActive() bool {
 	result, err := s.cliService.Execute(ExecuteOptions{
-		Command:   fmt.Sprintf("sudo systemctl stop %s.timer", s.schedule.Name),
-		StreamLog: true,
+		Command:   fmt.Sprintf("sudo systemctl is-active %s.timer 2>/dev/null", s.schedule.Name),
+		StreamLog: false,
+	})
+	if err != nil || result.ExitCode != 0 {
+		return false
+	}
+	return strings.TrimSpace(result.Stdout) == "active"
+}
+
+func (s *ScheduleService) stopTimer() error {
+	// Only stop if it's active
+	if !s.isTimerActive() {
+		return nil
+	}
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo systemctl stop --quiet %s.timer 2>/dev/null", s.schedule.Name),
+		StreamLog: false,
 	})
 	if err != nil {
 		return err
@@ -420,10 +453,25 @@ func (s *ScheduleService) enableService() error {
 	return nil
 }
 
-func (s *ScheduleService) disableService() error {
+func (s *ScheduleService) isServiceEnabled() bool {
 	result, err := s.cliService.Execute(ExecuteOptions{
-		Command:   fmt.Sprintf("sudo systemctl disable %s.service", s.schedule.Name),
-		StreamLog: true,
+		Command:   fmt.Sprintf("sudo systemctl is-enabled %s.service 2>/dev/null", s.schedule.Name),
+		StreamLog: false,
+	})
+	if err != nil || result.ExitCode != 0 {
+		return false
+	}
+	return strings.TrimSpace(result.Stdout) == "enabled"
+}
+
+func (s *ScheduleService) disableService() error {
+	// Only disable if it's enabled
+	if !s.isServiceEnabled() {
+		return nil
+	}
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo systemctl disable --quiet %s.service 2>/dev/null", s.schedule.Name),
+		StreamLog: false,
 	})
 	if err != nil {
 		return err
@@ -450,10 +498,25 @@ func (s *ScheduleService) startService() error {
 	return nil
 }
 
-func (s *ScheduleService) stopService() error {
+func (s *ScheduleService) isServiceActive() bool {
 	result, err := s.cliService.Execute(ExecuteOptions{
-		Command:   fmt.Sprintf("sudo systemctl stop %s.service", s.schedule.Name),
-		StreamLog: true,
+		Command:   fmt.Sprintf("sudo systemctl is-active %s.service 2>/dev/null", s.schedule.Name),
+		StreamLog: false,
+	})
+	if err != nil || result.ExitCode != 0 {
+		return false
+	}
+	return strings.TrimSpace(result.Stdout) == "active"
+}
+
+func (s *ScheduleService) stopService() error {
+	// Only stop if it's active
+	if !s.isServiceActive() {
+		return nil
+	}
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   fmt.Sprintf("sudo systemctl stop --quiet %s.service 2>/dev/null", s.schedule.Name),
+		StreamLog: false,
 	})
 	if err != nil {
 		return err
