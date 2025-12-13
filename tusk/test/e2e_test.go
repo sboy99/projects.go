@@ -3,6 +3,7 @@ package test
 import (
 	"os"
 	"os/exec"
+	"runtime"
 	"testing"
 )
 
@@ -13,7 +14,7 @@ func TestCLIVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("version command failed: %v\nOutput: %s", err, output)
 	}
-	
+
 	if len(output) == 0 {
 		t.Error("version command produced no output")
 	}
@@ -26,7 +27,7 @@ func TestCLIStart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("schedule list command failed: %v\nOutput: %s", err, output)
 	}
-	
+
 	// schedule list should succeed and produce output (even if empty)
 	if len(output) == 0 {
 		t.Error("schedule list command produced no output")
@@ -39,27 +40,27 @@ func TestCLIStop(t *testing.T) {
 	output, err := cmd.CombinedOutput()
 	// Note: command may exit with code 0 even when sudo fails, but should log an error
 	outputStr := string(output)
-	
+
 	// Verify it handles the sudo requirement and logs an appropriate error message
 	if !contains(outputStr, "sudo") && !contains(outputStr, "privileges") && !contains(outputStr, "ERROR") {
 		t.Errorf("schedule delete should handle sudo requirement, got: %s", outputStr)
 	}
-	
+
 	// Command should produce some output
 	if len(outputStr) == 0 {
 		t.Error("schedule delete command produced no output")
 	}
-	
+
 	// If there was an actual error (not just sudo warning), that's fine for this test
 	_ = err
 }
 
 // Helper function to check if a string contains a substring
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || 
-		(len(s) > len(substr) && (s[:len(substr)] == substr || 
-		s[len(s)-len(substr):] == substr || 
-		containsMiddle(s, substr))))
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
+		(len(s) > len(substr) && (s[:len(substr)] == substr ||
+			s[len(s)-len(substr):] == substr ||
+			containsMiddle(s, substr))))
 }
 
 func containsMiddle(s, substr string) bool {
@@ -72,9 +73,21 @@ func containsMiddle(s, substr string) bool {
 }
 
 func TestMain(m *testing.M) {
+	// Check if we're cross-compiling
+	// E2E tests require native execution, so skip if cross-compiling
+	goos := os.Getenv("GOOS")
+	goarch := os.Getenv("GOARCH")
+
+	// If GOOS/GOARCH are set and don't match runtime, we're cross-compiling
+	if goos != "" && goos != runtime.GOOS {
+		os.Exit(0) // Skip tests
+	}
+	if goarch != "" && goarch != runtime.GOARCH {
+		os.Exit(0) // Skip tests
+	}
+
 	// Setup
 	code := m.Run()
 	// Teardown
 	os.Exit(code)
 }
-
