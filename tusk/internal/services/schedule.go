@@ -117,11 +117,20 @@ func (s *ScheduleService) Delete(name string) error {
 }
 
 func (s *ScheduleService) createSchedule(name, command, interval string) error {
+	s.logger.Info("==> Validating command: %s", command)
 	if err := s.cliService.IsValidCommand(command, false); err != nil {
-		s.logger.Info("==> Validating command: %s", command)
-	}
-	if err := s.cliService.IsValidCommand(command, false); err != nil {
-		s.logger.Error("invalid command: %v", err)
+		// Provide a more user-friendly error message
+		if strings.Contains(err.Error(), "executable file not found") {
+			// Extract the executable name from the command
+			parts := strings.Fields(command)
+			executable := command
+			if len(parts) > 0 {
+				executable = parts[0]
+			}
+			s.logger.Error("command '%s' not found: please ensure the executable exists in your PATH", executable)
+		} else {
+			s.logger.Error("invalid command: %v", err)
+		}
 		return err
 	}
 
