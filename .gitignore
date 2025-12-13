@@ -61,7 +61,8 @@ ehthumbs.db
 Desktop.ini
 
 # Go test binaries and examples
-*_test.go
+*.test
+!*_test.go
 example/
 
 # Local configurations
