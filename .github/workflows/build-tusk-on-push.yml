@@ -91,6 +91,17 @@ jobs:
           
           echo "Built: ${OUTPUT_PATH}"
 
+      - name: Download dependencies
+        working-directory: tusk
+        run: |
+          go mod download
+          go mod tidy
+
+      - name: Run tests
+        working-directory: tusk
+        run: |
+          go test -v ./...
+
       - name: Create checksum
         working-directory: tusk
         run: |
