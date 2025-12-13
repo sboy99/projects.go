@@ -42,7 +42,7 @@ config.yaml
 *.log
 
 # Tasks
-data
+/data
 
 # Others
 TASKS.md
