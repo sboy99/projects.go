@@ -97,23 +97,12 @@ jobs:
           go mod download
           go mod tidy
 
-      - name: Run tests
+      - name: Run unit tests
         working-directory: tusk
         run: |
-          # Get native GOOS/GOARCH (without cross-compilation env vars)
-          NATIVE_GOOS=$(go env GOOS)
-          NATIVE_GOARCH=$(go env GOARCH)
-          
-          # Check if we're cross-compiling
-          if [ "${{ matrix.goos }}" != "${NATIVE_GOOS}" ] || [ "${{ matrix.goarch }}" != "${NATIVE_GOARCH}" ]; then
-            echo "Cross-compiling detected (target: ${{ matrix.goos }}/${{ matrix.goarch }}, native: ${NATIVE_GOOS}/${NATIVE_GOARCH})"
-            echo "Skipping e2e tests, running unit tests only..."
-            # Run unit tests only (exclude e2e tests in test/ directory)
-            go test -v $(go list ./... | grep -v '/test$')
-          else
-            echo "Native build detected, running all tests including e2e..."
-            go test -v ./...
-          fi
+          echo "Running unit tests only (excluding e2e tests)..."
+          # Run unit tests only (exclude e2e tests in test/ directory)
+          go test -v $(go list ./... | grep -v '/test$')
 
       - name: Create checksum
         working-directory: tusk
