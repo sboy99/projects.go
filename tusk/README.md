@@ -4,6 +4,34 @@ A command-line tool built with Go and Cobra.
 
 ## Installation
 
+### Using Install Script (Recommended)
+
+Install the latest version:
+```bash
+curl -fsSL https://raw.githubusercontent.com/sboy99/projects.go/main/tusk/scripts/install.sh | bash
+```
+
+Or specify a version:
+```bash
+# Install latest stable version
+curl -fsSL https://raw.githubusercontent.com/sboy99/projects.go/main/tusk/scripts/install.sh | bash -s stable
+
+# Install specific version
+curl -fsSL https://raw.githubusercontent.com/sboy99/projects.go/main/tusk/scripts/install.sh | bash -s v1.0.0
+```
+
+Download and run the script manually:
+```bash
+# Install latest
+./scripts/install.sh
+
+# Install latest stable
+./scripts/install.sh stable
+
+# Install specific version
+./scripts/install.sh v1.0.0
+```
+
 ### From Source
 
 ```bash

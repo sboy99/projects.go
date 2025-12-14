@@ -52,10 +52,32 @@ detect_arch() {
     esac
 }
 
-# Get latest release version
+# Get latest release version (including pre-releases)
 get_latest_version() {
     local version
     version=$(curl -s "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    echo "$version"
+}
+
+# Get latest stable release version (non-prerelease)
+get_stable_version() {
+    local version
+    # Try to use jq if available for better JSON parsing
+    if command -v jq >/dev/null 2>&1; then
+        version=$(curl -s "https://api.github.com/repos/${REPO}/releases" | jq -r '.[] | select(.prerelease == false) | .tag_name' | head -n 1)
+    else
+        # Fallback: parse releases and find first non-prerelease
+        # This reads the JSON and extracts tag_name for releases where prerelease is false
+        version=$(curl -s "https://api.github.com/repos/${REPO}/releases" | \
+            grep -A 50 '"tag_name":' | \
+            awk -F'"' '/"tag_name":/ {tag=$4} /"prerelease":\s*false/ && tag {print tag; exit}' | \
+            head -n 1)
+    fi
+    if [ -z "$version" ]; then
+        # Fallback to latest if no stable release found
+        echo -e "${YELLOW}Warning: No stable release found, falling back to latest${NC}" >&2
+        version=$(get_latest_version)
+    fi
     echo "$version"
 }
 
@@ -70,11 +92,16 @@ install_tusk() {
     
     # Check if architecture is supported
     case "${os}/${arch}" in
-        linux/amd64|linux/arm64|darwin/amd64|darwin/arm64)
+        linux/amd64|linux/arm64)
+            ;;
+        darwin/amd64|darwin/arm64)
+            echo -e "${YELLOW}Darwin (macOS) installation is not supported${NC}"
+            echo -e "${YELLOW}We are working on it. Please check back later.${NC}"
+            exit 1
             ;;
         windows/amd64)
-            echo -e "${YELLOW}Windows installation is not fully supported in this script.${NC}"
-            echo -e "${YELLOW}Please download the .zip file manually from GitHub releases.${NC}"
+            echo -e "${YELLOW}Windows installation is not fully supported${NC}"
+            echo -e "${YELLOW}Check back later for updates.${NC}"
             exit 1
             ;;
         *)
@@ -82,8 +109,6 @@ install_tusk() {
             echo -e "${YELLOW}Supported architectures:${NC}"
             echo "  - linux/amd64"
             echo "  - linux/arm64"
-            echo "  - darwin/amd64"
-            echo "  - darwin/arm64"
             exit 1
             ;;
     esac
@@ -94,6 +119,13 @@ install_tusk() {
         version=$(get_latest_version)
         if [ -z "$version" ]; then
             echo -e "${RED}Error: Could not fetch latest version${NC}"
+            exit 1
+        fi
+    elif [ "$VERSION" = "stable" ]; then
+        echo "Fetching latest stable version..."
+        version=$(get_stable_version)
+        if [ -z "$version" ]; then
+            echo -e "${RED}Error: Could not fetch stable version${NC}"
             exit 1
         fi
     else
@@ -158,8 +190,37 @@ install_tusk() {
     fi
 }
 
+# Show usage
+show_usage() {
+    echo "Usage: $0 [VERSION]"
+    echo ""
+    echo "Options:"
+    echo "  VERSION    Version to install (default: latest)"
+    echo "             - latest: Latest release (including pre-releases)"
+    echo "             - stable: Latest stable release (non-prerelease)"
+    echo "             - vX.Y.Z: Specific version tag"
+    echo ""
+    echo "Examples:"
+    echo "  $0              # Install latest version"
+    echo "  $0 latest       # Install latest version"
+    echo "  $0 stable       # Install latest stable version"
+    echo "  $0 v1.0.0       # Install specific version"
+    echo ""
+}
+
 # Main
 main() {
+    # Parse arguments
+    if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+        show_usage
+        exit 0
+    fi
+    
+    # Allow VERSION to be passed as argument
+    if [ -n "$1" ]; then
+        VERSION="$1"
+    fi
+    
     echo "Tusk CLI Installer"
     echo "=================="
     echo ""
