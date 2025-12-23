@@ -109,7 +109,7 @@ func (f *Formatter) FormatSuccess(prefix, line string) {
 }
 
 func (f *Formatter) FormatInfo(prefix, line string) {
-	f.format(color.BgBlue, prefix, line)
+	f.format(color.FgBlue, prefix, line)
 }
 
 func (f *Formatter) FormatWarning(prefix, line string) {
