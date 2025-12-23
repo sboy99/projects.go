@@ -90,16 +90,9 @@ func (s *ScheduleService) List() error {
 }
 
 func (s *ScheduleService) Delete(name string) error {
-	schedule, err := s.getScheduleByName(name)
-	if err != nil {
+	if err := s.loadScheduleByName(name); err != nil {
 		return err
 	}
-	if schedule == nil {
-		s.logger.Error("schedule not found")
-		return nil
-	}
-	// Set the schedule so subsequent operations can use it
-	s.schedule = schedule
 	if err := s.goDisableAndStopTimerAndService(); err != nil {
 		return err
 	}
@@ -114,6 +107,13 @@ func (s *ScheduleService) Delete(name string) error {
 	}
 	s.logger.Success("deleted schedule %s successfully", name)
 	return nil
+}
+
+func (s *ScheduleService) Logs(name string, follow bool) error {
+	if err := s.loadScheduleByName(name); err != nil {
+		return err
+	}
+	return s.runJournalctl(follow)
 }
 
 func (s *ScheduleService) createSchedule(name, command, interval string) error {
@@ -553,6 +553,30 @@ func (s *ScheduleService) reloadSystemd() error {
 	return nil
 }
 
+func (s *ScheduleService) runJournalctl(follow bool) error {
+	journalCmd := fmt.Sprintf("sudo journalctl -u %s.service", s.schedule.Name)
+	if follow {
+		journalCmd += " -f"
+		s.logger.Info("Following logs for %s (Press Ctrl+C to exit)...", s.schedule.Name)
+	} else {
+		s.logger.Info("Showing logs for %s", s.schedule.Name)
+	}
+	result, err := s.cliService.Execute(ExecuteOptions{
+		Command:   journalCmd,
+		StreamLog: true,
+		UseShell:  true,
+	})
+	if err != nil {
+		s.logger.Error("failed to execute journalctl: %v", err)
+		return err
+	}
+	if result.ExitCode != 0 {
+		s.logger.Error("journalctl exited with code %d: %s", result.ExitCode, result.Stderr)
+		return fmt.Errorf("journalctl failed: %s", result.Stderr)
+	}
+	return nil
+}
+
 func (s *ScheduleService) goCreateFiles() error {
 	s.logger.Highlight("Creating files")
 	wg := sync.WaitGroup{}
@@ -719,6 +743,18 @@ func (s *ScheduleService) getScheduleByName(name string) (*Schedule, error) {
 		}
 	}
 	return nil, nil
+}
+
+func (s *ScheduleService) loadScheduleByName(name string) error {
+	schedule, err := s.getScheduleByName(name)
+	if err != nil {
+		return err
+	}
+	if schedule == nil {
+		return fmt.Errorf("schedule not found: %s", name)
+	}
+	s.schedule = schedule
+	return nil
 }
 
 func (s *ScheduleService) saveScheduleToStorage() error {

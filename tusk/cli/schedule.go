@@ -8,6 +8,7 @@ import (
 var name string
 var command string
 var interval string
+var follow bool
 
 // scheduleCmd represents the schedule command
 var scheduleCmd = &cobra.Command{
@@ -53,6 +54,21 @@ var scheduleDeleteCmd = &cobra.Command{
 	},
 }
 
+// scheduleLogsCmd represents the schedule logs command
+var scheduleLogsCmd = &cobra.Command{
+	Use:   "logs",
+	Short: "View logs for a scheduled task",
+	Long:  `View journal logs for a specific scheduled task by name. Use the -f flag to follow logs in real-time.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		if name == "" {
+			cmd.Help()
+			return
+		}
+		scheduleExecutor := executor.NewScheduleExecutor()
+		scheduleExecutor.Logs(name, follow)
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(scheduleCmd)
 
@@ -71,4 +87,10 @@ func init() {
 	scheduleCmd.AddCommand(scheduleDeleteCmd)
 	scheduleDeleteCmd.Flags().StringVarP(&name, "name", "n", "", "name of the schedule to delete")
 	scheduleDeleteCmd.MarkFlagRequired("name")
+
+	// Add logs subcommand
+	scheduleCmd.AddCommand(scheduleLogsCmd)
+	scheduleLogsCmd.Flags().StringVarP(&name, "name", "n", "", "name of the schedule to view logs for")
+	scheduleLogsCmd.Flags().BoolVarP(&follow, "follow", "f", false, "follow log output (similar to tail -f)")
+	scheduleLogsCmd.MarkFlagRequired("name")
 }

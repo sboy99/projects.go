@@ -48,3 +48,16 @@ func (e *ScheduleExecutor) Delete(name string) {
 		e.logger.Error("failed to delete schedule: %v", err)
 	}
 }
+
+func (e *ScheduleExecutor) Logs(name string, follow bool) {
+	// journalctl typically doesn't require sudo for reading logs
+	// but we check anyway for consistency and in case permissions are needed
+	if err := e.sudoService.RequestPrivileges(); err != nil {
+		e.logger.Error("failed to obtain sudo privileges: %v", err)
+		return
+	}
+
+	if err := e.scheduleService.Logs(name, follow); err != nil {
+		e.logger.Error("failed to view logs: %v", err)
+	}
+}
