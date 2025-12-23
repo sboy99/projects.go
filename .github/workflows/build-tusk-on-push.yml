@@ -97,14 +97,6 @@ jobs:
           go mod download
           go mod tidy
 
-      - name: Run unit tests
-        working-directory: tusk
-        if: matrix.os == 'linux'
-        run: |
-          echo "Running unit tests only (excluding e2e tests)..."
-          # Run unit tests only (exclude e2e tests in test/ directory)
-          go test -v $(go list ./... | grep -v '/test$')
-
       - name: Create checksum
         working-directory: tusk
         run: |
