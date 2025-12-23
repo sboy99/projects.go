@@ -15,7 +15,7 @@ func NewScheduleExecutor() *ScheduleExecutor {
 	return &ScheduleExecutor{
 		scheduleService: services.NewScheduleService(),
 		sudoService:     services.NewSudoService(),
-		logger:          logger.NewLogger("ScheduleExecutor: "),
+		logger:          logger.NewLogger(""),
 	}
 }
 

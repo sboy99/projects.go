@@ -106,7 +106,7 @@ func (f *Formatter) FormatOutput(prefix, line string, isStdout bool) {
 }
 
 func (f *Formatter) FormatHighlight(line string) {
-	color.New(color.FgMagenta).Printf("========================%s========================\n", line)
+	color.New(color.FgMagenta).Printf("[+] %s\n", line)
 }
 
 // FormatError formats an error message with prefix
@@ -129,5 +129,9 @@ func (f *Formatter) FormatWarning(prefix, line string) {
 }
 
 func (f *Formatter) FormatDebug(prefix, line string) {
+	color.New(color.FgBlack).Printf("%s[%s] %s\n", f.Indent, prefix, line)
+}
+
+func (f *Formatter) FormatPlain(prefix, line string) {
 	color.New(color.FgWhite).Printf("%s[%s] %s\n", f.Indent, prefix, line)
 }

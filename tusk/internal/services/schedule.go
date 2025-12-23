@@ -37,7 +37,7 @@ func NewScheduleService() *ScheduleService {
 		schedule:     &Schedule{},
 		cliService:   NewCLIService(),
 		timerService: NewTimerService(),
-		logger:       logger.NewLogger("ScheduleService: "),
+		logger:       logger.NewLogger(""),
 		storage:      storage.NewStorage[Schedule]("./data/schedules.json"),
 	}
 }

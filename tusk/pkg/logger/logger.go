@@ -47,7 +47,7 @@ func (l *Logger) SetPrefix(prefix string) {
 func (l *Logger) Debug(format string, args ...any) {
 	if l.level <= LevelDebug {
 		message := fmt.Sprintf(format, args...)
-		l.log("DEBUG", message, false)
+		l.log("DEBUG", message)
 	}
 }
 
@@ -62,7 +62,7 @@ func (l *Logger) Highlight(format string, args ...any) {
 func (l *Logger) Info(format string, args ...any) {
 	if l.level <= LevelInfo {
 		message := fmt.Sprintf(format, args...)
-		l.log("INFO", message, false)
+		l.log("INFO", message)
 	}
 }
 
@@ -70,7 +70,7 @@ func (l *Logger) Info(format string, args ...any) {
 func (l *Logger) Warn(format string, args ...any) {
 	if l.level <= LevelWarn {
 		message := fmt.Sprintf(format, args...)
-		l.log("WARN", message, false)
+		l.log("WARN", message)
 	}
 }
 
@@ -78,7 +78,7 @@ func (l *Logger) Warn(format string, args ...any) {
 func (l *Logger) Error(format string, args ...any) {
 	if l.level <= LevelError {
 		message := fmt.Sprintf(format, args...)
-		l.log("ERROR", message, true)
+		l.log("ERROR", message)
 	}
 }
 
@@ -86,28 +86,38 @@ func (l *Logger) Error(format string, args ...any) {
 func (l *Logger) Success(format string, args ...any) {
 	if l.level <= LevelInfo {
 		message := fmt.Sprintf(format, args...)
-		l.log("SUCCESS", message, false)
+		l.log("SUCCESS", message)
 	}
 }
 
 // Fatal logs a fatal error message and exits
 func (l *Logger) Fatal(format string, args ...any) {
 	message := fmt.Sprintf(format, args...)
-	l.log("FATAL", message, true)
+	l.log("FATAL", message)
 	os.Exit(1)
 }
 
 // log is the internal logging method
-func (l *Logger) log(level, message string, isError bool) {
+func (l *Logger) log(level, message string) {
 	tag := level
 	if l.prefix != "" {
 		tag = fmt.Sprintf("%s:%s", l.prefix, level)
 	}
-
-	if isError {
-		l.formatter.FormatError(tag, message)
-	} else {
+	switch level {
+	case "SUCCESS":
 		l.formatter.FormatSuccess(tag, message)
+	case "ERROR":
+		l.formatter.FormatError(tag, message)
+	case "WARN":
+		l.formatter.FormatWarning(tag, message)
+	case "INFO":
+		l.formatter.FormatInfo(tag, message)
+	case "DEBUG":
+		l.formatter.FormatDebug(tag, message)
+	case "FATAL":
+		l.formatter.FormatError(tag, message)
+	default:
+		l.formatter.FormatDebug(tag, message)
 	}
 }
 
@@ -127,7 +137,7 @@ func (l *Logger) Output(tag, message string, isError bool) {
 	if isError {
 		l.formatter.FormatError(tag, message)
 	} else {
-		l.formatter.FormatSuccess(tag, message)
+		l.formatter.FormatInfo(tag, message)
 	}
 }
 
