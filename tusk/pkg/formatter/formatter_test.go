@@ -101,20 +101,6 @@ func TestFormatter_FormatTable(t *testing.T) {
 	})
 }
 
-func TestFormatter_FormatOutput(t *testing.T) {
-	f := NewFormatter("  ")
-
-	// We can't easily test color output without capturing stdout,
-	// but we can verify it doesn't panic
-	t.Run("format stdout", func(t *testing.T) {
-		f.FormatOutput("=>", "test output", true)
-	})
-
-	t.Run("format stderr", func(t *testing.T) {
-		f.FormatOutput("!!", "test error", false)
-	})
-}
-
 func TestFormatter_FormatHighlight(t *testing.T) {
 	f := NewFormatter("")
 

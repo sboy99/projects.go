@@ -54,6 +54,6 @@ var versionCmd = &cobra.Command{
 	Short: "Print the version number",
 	Long:  `Print the version number and build information.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		log.Println(version.GetBuildInfo())
+		log.Plain("%s", version.GetBuildInfo())
 	},
 }

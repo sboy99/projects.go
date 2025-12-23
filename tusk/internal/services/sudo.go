@@ -16,7 +16,7 @@ type SudoService struct {
 // NewSudoService creates a new SudoService instance
 func NewSudoService() *SudoService {
 	return &SudoService{
-		logger: logger.NewLogger("SudoService: "),
+		logger: logger.NewLogger(""),
 	}
 }
 
@@ -48,4 +48,3 @@ func (s *SudoService) RequestPrivileges() error {
 	s.logger.Success("sudo privileges obtained")
 	return nil
 }
-

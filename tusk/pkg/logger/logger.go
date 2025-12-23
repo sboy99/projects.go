@@ -43,18 +43,18 @@ func (l *Logger) SetPrefix(prefix string) {
 	l.prefix = prefix
 }
 
+func (l *Logger) Highlight(format string, args ...any) {
+	if l.level <= LevelInfo {
+		message := fmt.Sprintf(format, args...)
+		l.formatter.FormatHighlight(message)
+	}
+}
+
 // Debug logs a debug message
 func (l *Logger) Debug(format string, args ...any) {
 	if l.level <= LevelDebug {
 		message := fmt.Sprintf(format, args...)
 		l.log("DEBUG", message)
-	}
-}
-
-func (l *Logger) Highlight(format string, args ...any) {
-	if l.level <= LevelInfo {
-		message := fmt.Sprintf(format, args...)
-		l.formatter.FormatHighlight(message)
 	}
 }
 
@@ -97,6 +97,11 @@ func (l *Logger) Fatal(format string, args ...any) {
 	os.Exit(1)
 }
 
+func (l *Logger) Plain(format string, args ...any) {
+	message := fmt.Sprintf(format, args...)
+	l.log("", message)
+}
+
 // log is the internal logging method
 func (l *Logger) log(level, message string) {
 	tag := level
@@ -117,19 +122,8 @@ func (l *Logger) log(level, message string) {
 	case "FATAL":
 		l.formatter.FormatError(tag, message)
 	default:
-		l.formatter.FormatDebug(tag, message)
+		l.formatter.FormatPlain(tag, message)
 	}
-}
-
-// Printf logs a formatted message at info level
-func (l *Logger) Printf(format string, args ...any) {
-	fmt.Printf(format, args...)
-}
-
-// Println logs a message at info level
-func (l *Logger) Println(args ...any) {
-	message := fmt.Sprint(args...)
-	fmt.Println(message)
 }
 
 // Output logs a message with a custom tag/prefix
@@ -137,7 +131,7 @@ func (l *Logger) Output(tag, message string, isError bool) {
 	if isError {
 		l.formatter.FormatError(tag, message)
 	} else {
-		l.formatter.FormatInfo(tag, message)
+		l.formatter.FormatPlain(tag, message)
 	}
 }
 

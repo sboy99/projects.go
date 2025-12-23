@@ -2,7 +2,6 @@ package formatter
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/fatih/color"
@@ -24,7 +23,7 @@ func NewFormatter(indent string) *Formatter {
 func (f *Formatter) FormatList(items []string) string {
 	var sb strings.Builder
 	for i, item := range items {
-		sb.WriteString(fmt.Sprintf("%s%d. %s\n", f.Indent, i+1, item))
+		fmt.Fprintf(&sb, "%s%d. %s\n", f.Indent, i+1, item)
 	}
 	return sb.String()
 }
@@ -64,7 +63,7 @@ func (f *Formatter) FormatTable(headers []string, rows [][]string) {
 		if i > 0 {
 			sb.WriteString("  ") // 2 spaces between columns
 		}
-		sb.WriteString(fmt.Sprintf("%-*s", colWidths[i], header))
+		fmt.Fprintf(&sb, "%-*s", colWidths[i], header)
 	}
 	sb.WriteString("\n")
 
@@ -86,23 +85,12 @@ func (f *Formatter) FormatTable(headers []string, rows [][]string) {
 			if i > 0 {
 				sb.WriteString("  ") // 2 spaces between columns
 			}
-			sb.WriteString(fmt.Sprintf("%-*s", colWidths[i], cell))
+			fmt.Fprintf(&sb, "%-*s", colWidths[i], cell)
 		}
 		sb.WriteString("\n")
 	}
 
 	fmt.Print(sb.String())
-}
-
-// FormatOutput formats CLI output with prefix and color coding
-func (f *Formatter) FormatOutput(prefix, line string, isStdout bool) {
-	if isStdout {
-		// Format stdout with prefix
-		color.New(color.FgGreen).Printf("%s[%s] %s\n", f.Indent, prefix, line)
-	} else {
-		// Format stderr with prefix (could use different formatting)
-		color.New(color.FgRed).Fprintf(os.Stderr, "%s[%s] %s\n", f.Indent, prefix, line)
-	}
 }
 
 func (f *Formatter) FormatHighlight(line string) {
@@ -112,26 +100,36 @@ func (f *Formatter) FormatHighlight(line string) {
 // FormatError formats an error message with prefix
 func (f *Formatter) FormatError(prefix, line string) {
 	// Format stderr with prefix (could use different formatting)
-	color.New(color.FgRed).Fprintf(os.Stderr, "%s[%s] %s\n", f.Indent, prefix, line)
+	f.format(color.FgRed, prefix, line)
 }
 
 // FormatSuccess formats a success message with prefix
 func (f *Formatter) FormatSuccess(prefix, line string) {
-	color.New(color.FgGreen).Printf("%s[%s] %s\n", f.Indent, prefix, line)
+	f.format(color.FgGreen, prefix, line)
 }
 
 func (f *Formatter) FormatInfo(prefix, line string) {
-	color.New(color.FgBlue).Printf("%s[%s] %s\n", f.Indent, prefix, line)
+	f.format(color.BgBlue, prefix, line)
 }
 
 func (f *Formatter) FormatWarning(prefix, line string) {
-	color.New(color.FgYellow).Printf("%s[%s] %s\n", f.Indent, prefix, line)
+	f.format(color.FgYellow, prefix, line)
 }
 
 func (f *Formatter) FormatDebug(prefix, line string) {
-	color.New(color.FgBlack).Printf("%s[%s] %s\n", f.Indent, prefix, line)
+	f.format(color.FgBlack, prefix, line)
 }
 
 func (f *Formatter) FormatPlain(prefix, line string) {
-	color.New(color.FgWhite).Printf("%s[%s] %s\n", f.Indent, prefix, line)
+	f.format(color.FgWhite, prefix, line)
+}
+
+func (f *Formatter) format(colorAttribute color.Attribute, prefix, line string) {
+	message := ""
+	if prefix != "" {
+		message = fmt.Sprintf("%s[%s] %s", f.Indent, prefix, line)
+	} else {
+		message = fmt.Sprintf("%s%s", f.Indent, line)
+	}
+	color.New(colorAttribute).Printf("%s\n", message)
 }

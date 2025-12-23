@@ -128,20 +128,12 @@ func TestLogger_Success(t *testing.T) {
 	logger.Success("formatted %s", "success")
 }
 
-func TestLogger_Printf(t *testing.T) {
+func TestLogger_Plain(t *testing.T) {
 	logger := NewLogger("")
 
 	// Should not panic
-	logger.Printf("test %s", "message")
-	logger.Printf("simple message")
-}
-
-func TestLogger_Println(t *testing.T) {
-	logger := NewLogger("")
-
-	// Should not panic
-	logger.Println("test message")
-	logger.Println("multiple", "arguments")
+	logger.Plain("%s", "test plain")
+	logger.Plain("formatted %s", "plain")
 }
 
 func TestLogger_Output(t *testing.T) {
