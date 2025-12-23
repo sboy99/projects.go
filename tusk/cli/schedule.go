@@ -14,14 +14,14 @@ var follow bool
 var scheduleCmd = &cobra.Command{
 	Use:   "schedule",
 	Short: "Manage scheduled tasks",
-	Long:  `Manage scheduled tasks with create, list, and other operations.`,
+	Long:  "Manage scheduled tasks with create, list, and other operations.",
 }
 
 // scheduleCreateCmd represents the schedule create command
 var scheduleCreateCmd = &cobra.Command{
 	Use:   "create [command] [interval]",
 	Short: "Create a new scheduled task",
-	Long:  `Create a new scheduled task with the specified name, command, and interval. Command and interval can be provided as flags or positional arguments.`,
+	Long:  "Create a new scheduled task with the specified name, command, and interval. Command and interval can be provided as flags or positional arguments. Command is the command to schedule (e.g. echo 'Hello, World!') and interval is the interval for scheduling (e.g. 1m, 1h, 1d, 1w). Name is the name of the scheduled task (e.g. my-task)",
 	Example: `
 	tusk schedule create -n my-task -c "echo 'Hello, World!'" -i "1m"
 	tusk schedule create -n my-task -c "echo 'Hello, World!'" -i "1h"
@@ -54,12 +54,10 @@ var scheduleCreateCmd = &cobra.Command{
 
 // scheduleListCmd represents the schedule list command
 var scheduleListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List all scheduled tasks",
-	Long:  `List all scheduled tasks with their details.`,
-	Example: `
-	tusk schedule list
-	`,
+	Use:     "list",
+	Short:   "List all scheduled tasks",
+	Long:    `List all scheduled tasks with their details.`,
+	Example: `tusk schedule list`,
 	Run: func(cmd *cobra.Command, args []string) {
 		scheduleExecutor := executor.NewScheduleExecutor()
 		scheduleExecutor.List()
@@ -70,7 +68,7 @@ var scheduleListCmd = &cobra.Command{
 var scheduleDeleteCmd = &cobra.Command{
 	Use:   "delete [name]",
 	Short: "Delete a scheduled task",
-	Long:  `Delete a scheduled task by name. This will stop and disable the timer, delete all associated files, and remove the entry from storage. Name can be provided as a flag or positional argument.`,
+	Long:  "Delete a scheduled task by name. This will stop and disable the timer, delete all associated files, and remove the entry from storage. Name can be provided as a flag or positional argument.",
 	Example: `
 	tusk schedule delete -n my-task
 	tusk schedule delete my-task
@@ -94,13 +92,12 @@ var scheduleDeleteCmd = &cobra.Command{
 var scheduleLogsCmd = &cobra.Command{
 	Use:   "logs [name]",
 	Short: "View logs for a scheduled task",
-	Long:  `View journal logs for a specific scheduled task by name. Use the -f flag to follow logs in real-time. Name can be provided as a flag or positional argument.`,
+	Long:  "View journal logs for a specific scheduled task by name. Use the -f flag to follow logs in real-time. Name can be provided as a flag or positional argument.",
 	Example: `
 	tusk schedule logs -n my-task
 	tusk schedule logs my-task
 	tusk schedule logs -n my-task -f
-	tusk schedule logs my-task -f
-	`,
+	tusk schedule logs my-task -f`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Use positional argument if flag is not provided
 		if name == "" && len(args) > 0 {
