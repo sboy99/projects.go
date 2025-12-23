@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -32,13 +33,18 @@ type ScheduleService struct {
 	storage      *storage.Storage[Schedule]
 }
 
+func getScheduleStoragePath() string {
+	tuskPath := utils.GetTuskPath()
+	return filepath.Join(tuskPath, "data", "schedules.json")
+}
+
 func NewScheduleService() *ScheduleService {
 	return &ScheduleService{
 		schedule:     &Schedule{},
 		cliService:   NewCLIService(),
 		timerService: NewTimerService(),
 		logger:       logger.NewLogger(""),
-		storage:      storage.NewStorage[Schedule]("./data/schedules.json"),
+		storage:      storage.NewStorage[Schedule](getScheduleStoragePath()),
 	}
 }
 

@@ -2,6 +2,8 @@ package utils
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
@@ -158,4 +160,13 @@ func TransformToTableData[T any](data map[string]T, selectedFields ...string) (h
 	}
 
 	return headers, rows
+}
+
+func GetTuskPath() string {
+	dirName := ".tusk"
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return filepath.Join(".", dirName)
+	}
+	return filepath.Join(home, dirName)
 }
