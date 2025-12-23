@@ -24,7 +24,7 @@ func NewSudoService() *SudoService {
 func (s *SudoService) RequestPrivileges() error {
 	// Check if already running as root
 	if os.Geteuid() == 0 {
-		s.logger.Info("running as root, no sudo required")
+		s.logger.Info("Running as root, no sudo required")
 		return nil
 	}
 
@@ -35,7 +35,7 @@ func (s *SudoService) RequestPrivileges() error {
 
 	// Validate sudo privileges by running sudo -v
 	// This will prompt for password if needed and cache credentials
-	s.logger.Info("requesting sudo privileges...")
+	s.logger.Info("Requesting sudo privileges...")
 	cmd := exec.Command("sudo", "-v")
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -45,6 +45,6 @@ func (s *SudoService) RequestPrivileges() error {
 		return fmt.Errorf("failed to obtain sudo privileges: %w", err)
 	}
 
-	s.logger.Success("sudo privileges obtained")
+	s.logger.Success("Sudo privileges obtained")
 	return nil
 }

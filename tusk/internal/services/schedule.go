@@ -76,18 +76,18 @@ func (s *ScheduleService) Create(name, command, interval string) error {
 	if err := s.saveScheduleToStorage(); err != nil {
 		return err
 	}
-	s.logger.Success("scheduled task %s successfully", s.schedule.Name)
+	s.logger.Success("Scheduled task %s successfully", s.schedule.Name)
 	return nil
 }
 
 func (s *ScheduleService) List() error {
 	schedules, err := s.storage.ReadAll()
 	if err != nil {
-		s.logger.Error("failed to get all schedules: %v", err)
+		s.logger.Error("Failed to get all schedules: %v", err)
 		return err
 	}
 	if len(schedules) == 0 {
-		s.logger.Info("no scheduled tasks found")
+		s.logger.Info("No scheduled tasks found")
 		return nil
 	}
 	headers, rows := utils.TransformToTableData(schedules, "Name", "Command", "Interval", "StartTime")
@@ -111,7 +111,7 @@ func (s *ScheduleService) Delete(name string) error {
 	if err := s.deleteScheduleFromStorage(); err != nil {
 		return err
 	}
-	s.logger.Success("deleted schedule %s successfully", name)
+	s.logger.Success("Deleted schedule %s successfully", name)
 	return nil
 }
 
@@ -133,16 +133,16 @@ func (s *ScheduleService) createSchedule(name, command, interval string) error {
 			if len(parts) > 0 {
 				executable = parts[0]
 			}
-			s.logger.Error("command '%s' not found: please ensure the executable exists in your PATH", executable)
+			s.logger.Error("Command '%s' not found: please ensure the executable exists in your PATH", executable)
 		} else {
-			s.logger.Error("invalid command: %v", err)
+			s.logger.Error("Invalid command: %v", err)
 		}
 		return err
 	}
 
 	s.logger.Info("==> Validating interval: %s", interval)
 	if err := s.timerService.IsValidInterval(interval); err != nil {
-		s.logger.Error("invalid interval: %v", err)
+		s.logger.Error("Invalid interval: %v", err)
 		return err
 	}
 
@@ -150,7 +150,7 @@ func (s *ScheduleService) createSchedule(name, command, interval string) error {
 		name = namegen.GenerateOne()
 	}
 
-	s.logger.Highlight("creating schedule %s", name)
+	s.logger.Highlight("Creating schedule %s", name)
 	s.schedule = &Schedule{
 		ID:              utils.GenerateUUID(),
 		Name:            name,
@@ -372,7 +372,7 @@ func (s *ScheduleService) enableTimer() error {
 		return err
 	}
 	if result.ExitCode != 0 {
-		s.logger.Error("command exited with code %d: %s", result.ExitCode, result.Stderr)
+		s.logger.Error("Command exited with code %d: %s", result.ExitCode, result.Stderr)
 		return err
 	}
 	return nil
@@ -553,7 +553,7 @@ func (s *ScheduleService) reloadSystemd() error {
 		return err
 	}
 	if result.ExitCode != 0 {
-		s.logger.Error("command exited with code %d: %s", result.ExitCode, result.Stderr)
+		s.logger.Error("Command exited with code %d: %s", result.ExitCode, result.Stderr)
 		return err
 	}
 	return nil
@@ -573,11 +573,11 @@ func (s *ScheduleService) runJournalctl(follow bool) error {
 		UseShell:  true,
 	})
 	if err != nil {
-		s.logger.Error("failed to execute journalctl: %v", err)
+		s.logger.Error("Failed to execute journalctl: %v", err)
 		return err
 	}
 	if result.ExitCode != 0 {
-		s.logger.Error("journalctl exited with code %d: %s", result.ExitCode, result.Stderr)
+		s.logger.Error("Journalctl exited with code %d: %s", result.ExitCode, result.Stderr)
 		return fmt.Errorf("journalctl failed: %s", result.Stderr)
 	}
 	return nil
@@ -591,25 +591,25 @@ func (s *ScheduleService) goCreateFiles() error {
 	wg.Go(func() {
 		s.logger.Info("==> Creating script...")
 		if err := s.createScriptFile(); err != nil {
-			s.logger.Error("failed to create script: %v", err)
+			s.logger.Error("Failed to create script: %v", err)
 			errChan <- err
 		}
 		if err := s.giveScriptExecPermission(); err != nil {
-			s.logger.Error("failed to give script exec permission: %v", err)
+			s.logger.Error("Failed to give script exec permission: %v", err)
 			errChan <- err
 		}
 	})
 	wg.Go(func() {
 		s.logger.Info("==> Creating service file...")
 		if err := s.createServiceFile(); err != nil {
-			s.logger.Error("failed to create service file: %v", err)
+			s.logger.Error("Failed to create service file: %v", err)
 			errChan <- err
 		}
 	})
 	wg.Go(func() {
 		s.logger.Info("==> Creating timer file...")
 		if err := s.createTimerFile(); err != nil {
-			s.logger.Error("failed to create timer file: %v", err)
+			s.logger.Error("Failed to create timer file: %v", err)
 			errChan <- err
 		}
 	})
@@ -631,21 +631,21 @@ func (s *ScheduleService) goDeleteFiles() error {
 	wg.Go(func() {
 		s.logger.Info("==> Deleting script file...")
 		if err := s.deleteScriptFile(); err != nil {
-			s.logger.Error("failed to delete script file: %v", err)
+			s.logger.Error("Failed to delete script file: %v", err)
 			errChan <- err
 		}
 	})
 	wg.Go(func() {
 		s.logger.Info("==> Deleting service file...")
 		if err := s.deleteServiceFile(); err != nil {
-			s.logger.Error("failed to delete service file: %v", err)
+			s.logger.Error("Failed to delete service file: %v", err)
 			errChan <- err
 		}
 	})
 	wg.Go(func() {
 		s.logger.Info("==> Deleting timer file...")
 		if err := s.deleteTimerFile(); err != nil {
-			s.logger.Error("failed to delete timer file: %v", err)
+			s.logger.Error("Failed to delete timer file: %v", err)
 			errChan <- err
 		}
 	})
@@ -667,24 +667,24 @@ func (s *ScheduleService) goEnableAndStartTimerAndService() error {
 	wg.Go(func() {
 		s.logger.Info("==> Enabling timer...")
 		if err := s.enableTimer(); err != nil {
-			s.logger.Error("failed to enable timer: %v", err)
+			s.logger.Error("Failed to enable timer: %v", err)
 			errChan <- err
 		}
 		s.logger.Info("==> Starting timer...")
 		if err := s.startTimer(); err != nil {
-			s.logger.Error("failed to start timer: %v", err)
+			s.logger.Error("Failed to start timer: %v", err)
 			errChan <- err
 		}
 	})
 	wg.Go(func() {
 		s.logger.Info("==> Enabling service...")
 		if err := s.enableService(); err != nil {
-			s.logger.Error("failed to enable service: %v", err)
+			s.logger.Error("Failed to enable service: %v", err)
 			errChan <- err
 		}
 		s.logger.Info("==> Starting service...")
 		if err := s.startService(); err != nil {
-			s.logger.Error("failed to start service: %v", err)
+			s.logger.Error("Failed to start service: %v", err)
 			errChan <- err
 		}
 	})
@@ -706,24 +706,24 @@ func (s *ScheduleService) goDisableAndStopTimerAndService() error {
 	wg.Go(func() {
 		s.logger.Info("==> Stopping timer...")
 		if err := s.stopTimer(); err != nil {
-			s.logger.Error("failed to stop timer: %v", err)
+			s.logger.Error("Failed to stop timer: %v", err)
 			errChan <- err
 		}
 		s.logger.Info("==> Disabling timer...")
 		if err := s.disableTimer(); err != nil {
-			s.logger.Error("failed to disable timer: %v", err)
+			s.logger.Error("Failed to disable timer: %v", err)
 			errChan <- err
 		}
 	})
 	wg.Go(func() {
 		s.logger.Info("==> Stopping service...")
 		if err := s.stopService(); err != nil {
-			s.logger.Error("failed to stop service: %v", err)
+			s.logger.Error("Failed to stop service: %v", err)
 			errChan <- err
 		}
 		s.logger.Info("==> Disabling service...")
 		if err := s.disableService(); err != nil {
-			s.logger.Error("failed to disable service: %v", err)
+			s.logger.Error("Failed to disable service: %v", err)
 			errChan <- err
 		}
 	})
@@ -766,7 +766,7 @@ func (s *ScheduleService) loadScheduleByName(name string) error {
 func (s *ScheduleService) saveScheduleToStorage() error {
 	s.logger.Highlight("Saving schedule to storage")
 	if err := s.storage.Upsert(s.schedule.ID, *s.schedule); err != nil {
-		s.logger.Error("failed to upsert schedule: %v", err)
+		s.logger.Error("Failed to upsert schedule: %v", err)
 		return err
 	}
 	return nil
@@ -775,7 +775,7 @@ func (s *ScheduleService) saveScheduleToStorage() error {
 func (s *ScheduleService) deleteScheduleFromStorage() error {
 	s.logger.Highlight("Deleting schedule from storage")
 	if err := s.storage.Delete(s.schedule.ID); err != nil {
-		s.logger.Error("failed to delete schedule: %v", err)
+		s.logger.Error("Failed to delete schedule: %v", err)
 		return err
 	}
 	return nil
